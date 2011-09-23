@@ -71,7 +71,7 @@ THREE.Ship = function ( geometry, material ) {
 
     this.thrust = constrain( thrust, -1, 1 );
 
-		this.position.x += ( actualSpeed * this.thrust );
+		
 
 		// call supr
 		this.supr.update.call( this, parentMatrixWorld, forceUpdate, camera );
