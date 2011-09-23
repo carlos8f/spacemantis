@@ -6,7 +6,7 @@ $(init);
 function init() {
 
   scene = new THREE.Scene();
-  scene.fog = new THREE.FogExp2( 0x000000, 0.006 );
+  scene.fog = new THREE.FogExp2( 0x000000, 0.0045 );
 
   // grid
   var cubeMaterial = new THREE.MeshBasicMaterial( { color: 0x00ff00, wireframe: true, opacity: 0.9 } );
@@ -50,7 +50,7 @@ function init() {
     ship.matrixAutoUpdate = true;
     scene.addChild( ship );
 
-    camera = new THREE.FollowCamera( 60, window.innerWidth / window.innerHeight, 1, 2000, ship, 100, 50, 800 );
+    camera = new THREE.FollowCamera( 60, window.innerWidth / window.innerHeight, 1, 2000, ship, 100, 10, 200 );
     ship.addChild( camera );
 
     $('.info').html('Space demo.<br /><small>Controls: WASD w/ mouse<br /><a href="#" onclick="ship.reset();">reset ship</a> | <a href="#" onclick="ship.toggleMouseLook();">toggle mouseLook</a></small>');
