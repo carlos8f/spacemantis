@@ -1,16 +1,28 @@
 
-var camera, scene, renderer, ship, stats, vector1, s;
+var camera, scene, renderer, ship, stats;
 
 $(init);
 
 function init() {
 
-  // scene and camera
-
   scene = new THREE.Scene();
-  //scene.fog = new THREE.FogExp2( 0xffffff, 0.002 );
+  scene.fog = new THREE.FogExp2( 0x000000, 0.006 );
 
-  // world
+  // grid
+  var cubeMaterial = new THREE.MeshBasicMaterial( { color: 0x00ff00, wireframe: true, opacity: 0.9 } );
+  var distance = 1000;
+  for( var i = 0; i < distance; i++ ) {
+    var cubeGeom = new THREE.CubeGeometry( Math.ceil(Math.random() * 10), Math.ceil(Math.random() * 10), Math.ceil(Math.random() * 10));
+    var mesh = new THREE.Mesh( cubeGeom, cubeMaterial );
+    mesh.position.set(( Math.random() - 0.5 ) * distance,
+    ( Math.random() - 0.5 ) * distance,
+    0 );
+
+    mesh.updateMatrix();
+    mesh.matrixAutoUpdate = false;
+    scene.addChild( mesh );
+
+  }
 
   // lights
   light = new THREE.DirectionalLight( 0xffffff );
@@ -31,15 +43,14 @@ function init() {
   function addModel ( geometry ) {
     
     ship = new THREE.Ship( geometry, new THREE.MeshFaceMaterial() );
-    ship.scale.set( 2, 2, 2 );
     ship.lookSpeed = 4;
     ship.movementSpeed = 150;
-    ship.constrainVertical = [ -0.7, 0.7 ];
     ship.mouseLook = false;
-    //ship.rotationAutoUpdate = true;
+    ship.rotation.y = - Math.PI * 0.5;
+    ship.matrixAutoUpdate = true;
     scene.addChild( ship );
 
-    camera = new THREE.FollowCamera( 60, window.innerWidth / window.innerHeight, 1, 10000, ship );
+    camera = new THREE.FollowCamera( 60, window.innerWidth / window.innerHeight, 1, 2000, ship, 100, 50, 800 );
     ship.addChild( camera );
 
     $('.info').html('Space demo.<br /><small>Controls: WASD w/ mouse<br /><a href="#" onclick="ship.reset();">reset ship</a> | <a href="#" onclick="ship.toggleMouseLook();">toggle mouseLook</a></small>');

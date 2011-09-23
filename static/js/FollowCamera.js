@@ -28,9 +28,9 @@ THREE.FollowCamera = function ( fov, aspect, near, far, target, cameraDistance, 
   var leftClicking = false;
   var rightClicking = false;
   var thetaX = 0;
-  var thetaY = -2.5;
+  var thetaY = 0;
   var thetaXOffset = 0;
-  var thetaYOffset = -2.5;
+  var thetaYOffset = 0;
   cameraDistance = cameraDistance || 16;
   minDistance = minDistance || 10;
   maxDistance = maxDistance || 40;
@@ -106,8 +106,8 @@ THREE.FollowCamera = function ( fov, aspect, near, far, target, cameraDistance, 
       mouseDragCurrent.x = constrain( ( event.clientX / window.innerWidth ) * 2 - 1, -1.0, 1.0 );
       mouseDragCurrent.y = constrain( - ( event.clientY / window.innerHeight ) * 2 + 1, -1.0, 1.0 );
 
-      thetaX = constrain( thetaXOffset + (mouseDragCurrent.x - mouseDragStart.x) * 360, -360, 360 );
-      thetaY = constrain( thetaYOffset + (mouseDragCurrent.y - mouseDragStart.y) * 10, -10, 10 );
+      thetaX = thetaXOffset + (mouseDragCurrent.x - mouseDragStart.x) * 360;
+      thetaY = thetaYOffset + (mouseDragCurrent.y - mouseDragStart.y) * 10;
       
     }
 
