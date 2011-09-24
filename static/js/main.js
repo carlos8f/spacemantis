@@ -10,12 +10,12 @@ function init() {
   var cubeGeom, mesh;
 
   // grid
-  plane = new THREE.Mesh( new THREE.PlaneGeometry( 1000, 1000, 100, 100 ), new THREE.MeshBasicMaterial( { color: 0x555555, opacity: 0.8, wireframe: true } ) );
+  plane = new THREE.Mesh( new THREE.PlaneGeometry( 500, 500, 1, 1 ), new THREE.MeshBasicMaterial( { color: 0x555555, opacity: 0.0 } ) );
   scene.addChild( plane );
 
   var cubeMaterial = new THREE.MeshBasicMaterial( { color: 0x888888, wireframe: true, opacity: 0.9 } );
-  var distance = 1000;
-  for ( var i = 0; i < distance; i++ ) {
+  var distance = 500;
+  for ( var i = 0; i < 200; i++ ) {
     cubeGeom = new THREE.CubeGeometry( Math.ceil(Math.random() * 10), Math.ceil(Math.random() * 10), Math.ceil(Math.random() * 10));
     mesh = new THREE.Mesh( cubeGeom, cubeMaterial );
     mesh.position.set(( Math.random() - 0.5 ) * distance,
@@ -28,20 +28,7 @@ function init() {
 
   }
 
-  for ( var i = 0; i < distance; i++ ) {
-    cubeGeom = new THREE.CubeGeometry( Math.ceil(Math.random() * 10), Math.ceil(Math.random() * 10), Math.ceil(Math.random() * 10));
-    mesh = new THREE.Mesh( cubeGeom, cubeMaterial );
-    mesh.position.set(( Math.random() - 0.5 ) * distance,
-    ( Math.random() - 0.5 ) * distance,
-    150 );
-
-    mesh.updateMatrix();
-    mesh.matrixAutoUpdate = false;
-    scene.addChild( mesh );
-
-  }
-
-  for ( var i = 0; i < distance; i++ ) {
+  for ( var i = 0; i < 200; i++ ) {
     cubeGeom = new THREE.CubeGeometry( Math.ceil(Math.random() * 10), Math.ceil(Math.random() * 10), Math.ceil(Math.random() * 10));
     mesh = new THREE.Mesh( cubeGeom, cubeMaterial );
     mesh.position.set(( Math.random() - 0.5 ) * distance,
@@ -114,10 +101,9 @@ function init() {
     ship.mouseLook = false;
     ship.rotation.x = Math.PI * 0.5;
     ship.matrixAutoUpdate = true;
-    ship.scale.set( 2, 2, 2 );
     scene.addChild( ship );
 
-    camera = new THREE.FollowCamera( 60, window.innerWidth / window.innerHeight, 1, 2000, ship, 110, 10, 200 );
+    camera = new THREE.FollowCamera( 60, window.innerWidth / window.innerHeight, 1, 2000, ship, 140, 10, 200 );
     ship.addChild( camera );
     ray = new THREE.Ray( camera.position, null );
 
