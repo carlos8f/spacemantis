@@ -154,7 +154,7 @@ var SpaceMantis = function SpaceMantis(container, stats) {
 
   function initPlane() {
     _plane = new THREE.Mesh( new THREE.PlaneGeometry( 500, 500, 10, 10 ), new THREE.MeshBasicMaterial( { color: 0x991100, wireframe: true, opacity: 0.5 } ) );
-    _plane.position.z = -20;
+    _plane.position.z = -3;
     _scene.addChild( _plane );
 
     // @todo: set up an edgechain for plane bounds.
