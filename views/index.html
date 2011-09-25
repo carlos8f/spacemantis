@@ -7,20 +7,22 @@
     <style type="text/css">
       html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; }
       body { background: white; }
-      .info { position: absolute; top: 10px; width: 100%; text-align: center; color: #888; font-family: Arial, sans-serif; z-index: 10; }
-      a { color: #ccccee; }
     </style>
 
+    <script>
+      var exports = {};
+    </script>
+
     <script src="/socket.io/socket.io.js"></script>
-    <script src="/js/jquery-1.6.4.min.js"></script>
-    <script src="/js/spin.min.js"></script>
-    <script src="/js/Three.js"></script>
-    <script src="/js/Tween.js"></script>
-    <script src="/js/FollowCamera.js"></script>
-    <script src="/js/RequestAnimationFrame.js"></script>
     <script src="/js/Stats.js"></script>
-    <script src="/js/Ship.js"></script>
+    <script src="/js/Three.js"></script>
+    <script src="/js/Box2dWeb-2.1.a.3.js"></script>
+    <script src="/js/FollowCamera.js"></script>
+    <script src="/js/SpaceMantis.js"></script>
     <script src="/js/main.js"></script>
+    <script>
+    console.log(exports);
+    </script>
   </head>
-  <body><div class="info">Loading...</div></body>
+  <body onload="main();"><div class="info">Loading...</div></body>
 </html>
