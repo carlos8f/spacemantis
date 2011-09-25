@@ -1,7 +1,8 @@
 var SpaceMantis = function SpaceMantis(container, stats) {
 	var _self = this,
 		_container = container,
-		_stats = stats;
+		_stats = stats,
+    box2d = exports; // Poor man's commonjs module!
 
 	var _camera,
 		_scene,
@@ -33,8 +34,7 @@ var SpaceMantis = function SpaceMantis(container, stats) {
 
   var _gravity = 0;
 
-  // Poor man's commonjs module!
-  var box2d = exports;
+  var _velocity = new box2d.b2Vec2(0, 0);
 
   var _projector = new THREE.Projector();
   var _mouse2d = new THREE.Vector3();
@@ -104,7 +104,7 @@ var SpaceMantis = function SpaceMantis(container, stats) {
     def.type = box2d.b2Body.b2_dynamicBody;
     def.position=new box2d.b2Vec2(x, y);
     //def.angle=math.radians(0); // 0 degrees
-    def.linearDamping=0.1;  //gradually reduces velocity, makes the car reduce speed slowly if neither accelerator nor brake is pressed
+    def.linearDamping=0.2;  //gradually reduces velocity, makes the car reduce speed slowly if neither accelerator nor brake is pressed
     def.bullet=true; //dedicates more time to collision detection - car travelling at high speeds at low framerates otherwise might teleport through obstacles.
     def.angularDamping=0.3;
 
@@ -114,8 +114,8 @@ var SpaceMantis = function SpaceMantis(container, stats) {
 
     //initialize shape
     var fixdef= new box2d.b2FixtureDef();
-    fixdef.density = 1.0;
-    fixdef.friction = 0.3; //friction when rubbing against other shapes
+    fixdef.density = 0.0;
+    fixdef.friction = 0.0; //friction when rubbing against other shapes
     fixdef.restitution = 0.0;  //amount of force feedback when hitting something. >0 makes the car bounce off, it's fun!
     fixdef.shape=new box2d.b2PolygonShape;
     fixdef.shape.SetAsBox(width/2, height/2);
@@ -134,17 +134,17 @@ var SpaceMantis = function SpaceMantis(container, stats) {
   }
 
   function initShip() {
-    _ship = addCube( 0, 0, 15 );
+    _ship = addCube( 0, 0, 5 );
   }
 
   function initPlane() {
-    _plane = new THREE.Mesh( new THREE.PlaneGeometry( 500, 500, 100, 100 ), new THREE.MeshBasicMaterial( { color: 0x555555, opacity: 0.5, wireframe: true } ) );
+    _plane = new THREE.Mesh( new THREE.PlaneGeometry( 500, 500, 75, 75 ), new THREE.MeshBasicMaterial( { color: 0x555555, opacity: 0.5, wireframe: true } ) );
     _plane.position.z = -20;
     _scene.addChild( _plane );
   }
 
 	function initView() {
-    _camera = new THREE.FollowCamera( _fov, _metrics.stage.width / _metrics.stage.height, _near, _far, _ship, 140, 10, 200 );
+    _camera = new THREE.FollowCamera( _fov, _metrics.stage.width / _metrics.stage.height, _near, _far, _ship, 80, 10, 200 );
 
     _ray = new THREE.Ray( _camera.position, null );
 
@@ -165,14 +165,9 @@ var SpaceMantis = function SpaceMantis(container, stats) {
       _ray.direction = _mouse3d.subSelf( _camera.position ).normalize();
       var intersects = _ray.intersectObject( _plane );
       if ( intersects.length > 0 ) {
-        var force = 1000;
-        var direction = new THREE.Vector3();
-        direction.sub(intersects[0].point, _ship.position).multiplyScalar(force);
-        _ship.body.ApplyImpulse( new box2d.b2Vec2(direction.x, direction.y), new box2d.b2Vec2(0, 0) );
-        var speed = 1;
-        var velocity=new box2d.b2Vec2(direction.x*((speed*1000.0)/3600.0),
-                              direction.y*((speed*1000.0)/3600.0));
-        //_ship.body.SetLinearVelocity(velocity);
+        _velocity.Set(intersects[0].point.x - _ship.position.x, intersects[0].point.y - _ship.position.y);
+        _velocity.Normalize();
+        _velocity.Multiply(0.5);
       }
     }
 	};
@@ -190,7 +185,10 @@ var SpaceMantis = function SpaceMantis(container, stats) {
 	}
 
 	function loop() {
+    _ship.body.ApplyImpulse( _velocity, new box2d.b2Vec2(0, 0) );
+
 		_world.Step(_timeStep, _iterations);
+    _world.ClearForces();
 
 		for(var i = 0, max = _bodies.length; i < max; i++) {
 			var body = _bodies[i];
