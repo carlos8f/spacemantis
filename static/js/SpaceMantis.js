@@ -50,6 +50,7 @@ var SpaceMantis = function SpaceMantis(container, stats) {
     initShip();
 		initView();
     initPlane();
+    initObstacles();
 		initLights();
 		initEvents();
 
@@ -85,19 +86,27 @@ var SpaceMantis = function SpaceMantis(container, stats) {
 
 	function addCubeVisual(x, y, width, height, depth ) {
 		var geometry = new THREE.CubeGeometry( width, height, depth ),
-			material = new THREE.MeshBasicMaterial( { color: 0x555555, wireframe: true } ),
+			material = new THREE.MeshLambertMaterial( { color: 0x00ff00, opacity: 0.5 } ),
 			cube = new THREE.Mesh( geometry, material );
 
 		cube.position.set( x, y, 0 );
 
-		_scene.addObject( cube );
+		_scene.addChild( cube );
 		return cube;
 	}
 
-	function addCube( x, y, size ) {
+	function addShip( x, y, size ) {
 		var width = size,
 			height = width,
 			depth = height;
+
+    var geometry = new THREE.SphereGeometry( size, 14, 14 ),
+			material = new THREE.MeshLambertMaterial( { color: 0xcc5599, opacity: 1 } ),
+      mesh = new THREE.Mesh( geometry, material );
+
+		mesh.position.x = x;
+		mesh.position.y = y;
+		mesh.position.z = 0;
 
     //initialize body
     var def=new box2d.b2BodyDef();
@@ -109,7 +118,7 @@ var SpaceMantis = function SpaceMantis(container, stats) {
     def.angularDamping=0.3;
 
     var body = _world.CreateBody(def);
-    var userData = {mesh: addCubeVisual(x, y, width, height, depth )};
+    var userData = {mesh: mesh};
     body.SetUserData(userData);
 
     //initialize shape
@@ -117,30 +126,77 @@ var SpaceMantis = function SpaceMantis(container, stats) {
     fixdef.density = 0.0;
     fixdef.friction = 0.0; //friction when rubbing against other shapes
     fixdef.restitution = 0.0;  //amount of force feedback when hitting something. >0 makes the car bounce off, it's fun!
-    fixdef.shape=new box2d.b2PolygonShape;
-    fixdef.shape.SetAsBox(width/2, height/2);
+    fixdef.shape=new box2d.b2CircleShape(size);
+    //fixdef.shape.SetAsBox(width/2, height/2);
     body.CreateFixture(fixdef);
 
     _bodies.push( body );
 
     userData.mesh.body = body;
+    _scene.addChild(mesh);
 
     return userData.mesh;
 	}
 
   function initScene() {
     _scene = new THREE.Scene();
-    _scene.fog = new THREE.FogExp2( 0xffffff, 0.0045 );
+    _scene.fog = new THREE.FogExp2( 0x000000, 0.0045 );
   }
 
   function initShip() {
-    _ship = addCube( 0, 0, 5 );
+    _ship = addShip( 0, 0, 3 );
   }
 
   function initPlane() {
-    _plane = new THREE.Mesh( new THREE.PlaneGeometry( 500, 500, 75, 75 ), new THREE.MeshBasicMaterial( { color: 0x555555, opacity: 0.5, wireframe: true } ) );
+    _plane = new THREE.Mesh( new THREE.PlaneGeometry( 500, 500, 75, 75 ), new THREE.MeshBasicMaterial( { color: 0x555555, opacity: 0.0 } ) );
     _plane.position.z = -20;
     _scene.addChild( _plane );
+
+    // @todo: set up an edgechain for plane bounds.
+  }
+
+  function initObstacles() {
+
+    var material =  new THREE.MeshLambertMaterial( { color:0x5555ff, opacity: 0.4 } );
+
+    for( var i = 0; i < 500; i++) {
+      var width = Math.random() * 10 + 2,
+        height = Math.random() * 10 + 2,
+        depth = Math.random() * 10 + 2;
+
+      var cube = new THREE.CubeGeometry( width, height, depth );
+
+      var mesh = new THREE.Mesh( cube, material );
+      mesh.position.set(( Math.random() - 0.5 ) * 500,
+      ( Math.random() - 0.5 ) * 500,
+      0);
+
+      mesh.doubleSided = true;
+
+      //initialize body
+      var bdef=new box2d.b2BodyDef();
+      bdef.position=new box2d.b2Vec2(mesh.position.x, mesh.position.y);
+      bdef.angle=0;
+      bdef.fixedRotation=true;
+      var body = _world.CreateBody(bdef);
+
+      //initialize shape
+      var fixdef=new box2d.b2FixtureDef;
+      fixdef.shape=new box2d.b2PolygonShape();
+      fixdef.shape.SetAsBox(width/2, height/2);
+      fixdef.restitution=0.2; //positively bouncy!
+      body.CreateFixture(fixdef);
+
+      var userData = {mesh: mesh};
+      body.SetUserData(userData);
+
+      userData.mesh.body = body;
+
+      mesh.updateMatrix();
+      mesh.matrixAutoUpdate = false;
+      _scene.addChild( mesh );
+
+    }
   }
 
 	function initView() {
@@ -150,15 +206,40 @@ var SpaceMantis = function SpaceMantis(container, stats) {
 
 		_renderer = new THREE.WebGLRenderer( { antialias: true } );
 		_renderer.setSize( _metrics.stage.width, _metrics.stage.height );
+    _renderer.setClearColorHex( 0x000000, 1 );
 
 		_container.appendChild(_renderer.domElement);
 	}
 
 	function initLights() {
-		_scene.addLight( new THREE.AmbientLight( Math.random() * 0x202020 ) );
+
+    // LIGHTS
+
+    var ambient = new THREE.AmbientLight( 0x555555 );
+    _scene.addLight( ambient );
+
+    var directionalLight = new THREE.DirectionalLight( 0xff55ff, 2 );
+    directionalLight.position.x = 2;
+    directionalLight.position.y = 1.2;
+    directionalLight.position.z = 10;
+    directionalLight.position.normalize();
+    _scene.addLight( directionalLight );
+
+    directionalLight = new THREE.DirectionalLight( 0xffff55, 1 );
+    directionalLight.position.x = - 2;
+    directionalLight.position.y = 1.2;
+    directionalLight.position.z = - 10;
+    directionalLight.position.normalize();
+    _scene.addLight( directionalLight );
+
+    var pointLight = new THREE.PointLight( 0xffaa00, 2 );
+    pointLight.position.x = 2000;
+    pointLight.position.y = 1200;
+    pointLight.position.z = 10000;
+    _scene.addLight( pointLight );
 	}
 
-  function onMouseUp( event ) {
+  function onMouseDown( event ) {
     if ( event.button == 2 ) {
       _mouse2d.set( (event.clientX - _windowHalfX) / _metrics.stage.width, - ((event.clientY - _windowHalfY) / _metrics.stage.height) ).multiplyScalar( 2 );
       _mouse3d = _projector.unprojectVector( _mouse2d.clone(), _camera );
@@ -167,7 +248,7 @@ var SpaceMantis = function SpaceMantis(container, stats) {
       if ( intersects.length > 0 ) {
         _velocity.Set(intersects[0].point.x - _ship.position.x, intersects[0].point.y - _ship.position.y);
         _velocity.Normalize();
-        _velocity.Multiply(0.5);
+        //_velocity.Multiply(0.6);
       }
     }
 	};
@@ -180,7 +261,7 @@ var SpaceMantis = function SpaceMantis(container, stats) {
 
   function initEvents() {
     document.addEventListener( 'contextmenu', function ( event ) { event.preventDefault(); }, false );
-    document.addEventListener( 'mouseup', onMouseUp, false );
+    document.addEventListener( 'mousedown', onMouseDown, false );
     window.addEventListener( 'resize', onResize, false );
 	}
 
@@ -190,13 +271,10 @@ var SpaceMantis = function SpaceMantis(container, stats) {
 		_world.Step(_timeStep, _iterations);
     _world.ClearForces();
 
-		for(var i = 0, max = _bodies.length; i < max; i++) {
-			var body = _bodies[i];
-      var mesh = body.GetUserData().mesh;
-      var position = body.GetPosition();
-      mesh.position.set(position.x, position.y, 0);
-			mesh.rotation.z = body.GetAngle() * (Math.PI / 180); // ?
-		}
+    var body = _ship.body;
+    var position = body.GetPosition();
+    _ship.position.set(position.x, position.y, 0);
+    _ship.rotation.z = body.GetAngle() * (Math.PI / 180);
 
 		_renderer.render( _scene, _camera );
 
