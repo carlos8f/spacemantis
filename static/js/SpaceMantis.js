@@ -19,9 +19,9 @@ var SpaceMantis = function SpaceMantis(container, stats) {
 		}
 	}
 
-	var _frameRate = 30;
+	var _frameRate = 60;
 
-	var _timeStep = 1/10,
+	var _timeStep = 1/_frameRate,
 		_iterations = 1;
 
 	var _world, _ship, _plane, _ray;
@@ -42,7 +42,7 @@ var SpaceMantis = function SpaceMantis(container, stats) {
   var _windowHalfX = window.innerWidth / 2;
 	var _windowHalfY = window.innerHeight / 2;
 
-  var _loopInterval;
+  var _paused;
 
 	function init() {
     initScene();
@@ -58,11 +58,16 @@ var SpaceMantis = function SpaceMantis(container, stats) {
 	}
 
   function run() {
-    _loopInterval = setInterval(loop, 1000/_frameRate);
+    setInterval(step, 1000/_frameRate);
+    render();
   }
 
-  function stop() {
-    clearInterval(_loopInterval);
+  function pause() {
+    _paused = true;
+  }
+
+  function unpause() {
+    _paused = false;
   }
 
 	function initBox2d() {
@@ -125,7 +130,7 @@ var SpaceMantis = function SpaceMantis(container, stats) {
     var fixdef= new box2d.b2FixtureDef();
     fixdef.density = 0.0;
     fixdef.friction = 0.0; //friction when rubbing against other shapes
-    fixdef.restitution = 0.0;  //amount of force feedback when hitting something. >0 makes the car bounce off, it's fun!
+    fixdef.restitution = 0.7;  //amount of force feedback when hitting something. >0 makes the car bounce off, it's fun!
     fixdef.shape=new box2d.b2CircleShape(size);
     //fixdef.shape.SetAsBox(width/2, height/2);
     body.CreateFixture(fixdef);
@@ -148,7 +153,7 @@ var SpaceMantis = function SpaceMantis(container, stats) {
   }
 
   function initPlane() {
-    _plane = new THREE.Mesh( new THREE.PlaneGeometry( 500, 500, 75, 75 ), new THREE.MeshBasicMaterial( { color: 0x555555, opacity: 0.0 } ) );
+    _plane = new THREE.Mesh( new THREE.PlaneGeometry( 500, 500, 10, 10 ), new THREE.MeshBasicMaterial( { color: 0x991100, wireframe: true, opacity: 0.5 } ) );
     _plane.position.z = -20;
     _scene.addChild( _plane );
 
@@ -157,7 +162,7 @@ var SpaceMantis = function SpaceMantis(container, stats) {
 
   function initObstacles() {
 
-    var material =  new THREE.MeshLambertMaterial( { color:0x5555ff, opacity: 0.4 } );
+    var material =  new THREE.MeshLambertMaterial( { color:0x5555ff } );
 
     for( var i = 0; i < 500; i++) {
       var width = Math.random() * 10 + 2,
@@ -167,11 +172,9 @@ var SpaceMantis = function SpaceMantis(container, stats) {
       var cube = new THREE.CubeGeometry( width, height, depth );
 
       var mesh = new THREE.Mesh( cube, material );
-      mesh.position.set(( Math.random() - 0.5 ) * 500,
-      ( Math.random() - 0.5 ) * 500,
-      0);
-
-      mesh.doubleSided = true;
+        mesh.position.set(( Math.random() - 0.5 ) * 500,
+        ( Math.random() - 0.5 ) * 500,
+        0);
 
       //initialize body
       var bdef=new box2d.b2BodyDef();
@@ -253,6 +256,12 @@ var SpaceMantis = function SpaceMantis(container, stats) {
     }
 	};
 
+  function onKeyDown( event ) {
+		switch( event.keyCode ) {
+			case 32: _paused ? unpause() : pause(); break;
+		}
+	}
+
   function onResize() {
     _renderer.setSize(window.innerWidth, window.innerHeight);
     _camera.aspect = window.innerWidth / window.innerHeight;
@@ -262,24 +271,36 @@ var SpaceMantis = function SpaceMantis(container, stats) {
   function initEvents() {
     document.addEventListener( 'contextmenu', function ( event ) { event.preventDefault(); }, false );
     document.addEventListener( 'mousedown', onMouseDown, false );
+    document.addEventListener( 'keydown', onKeyDown, false );
     window.addEventListener( 'resize', onResize, false );
 	}
 
-	function loop() {
-    _ship.body.ApplyImpulse( _velocity, new box2d.b2Vec2(0, 0) );
+	function render() {
+    requestAnimationFrame(render);
 
-		_world.Step(_timeStep, _iterations);
+		_renderer.render( _scene, _camera );
+		_stats.update();
+	}
+
+  function step() {
+    if (_paused) {
+      return;
+    }
+    _ship.body.ApplyImpulse(_velocity, new box2d.b2Vec2(0, 0));
+
+    _world.Step(_timeStep, _iterations);
     _world.ClearForces();
 
     var body = _ship.body;
     var position = body.GetPosition();
     _ship.position.set(position.x, position.y, 0);
-    _ship.rotation.z = body.GetAngle() * (Math.PI / 180);
+    //_ship.rotation.z = body.GetAngle() * (Math.PI / 180);
 
-		_renderer.render( _scene, _camera );
-
-		_stats.update();
-	}
+    if (_ship.position.x > 250 || _ship.position.x < -250 || _ship.position.y > 250 || _ship.position.y < -250) {
+      _ship.position.set(0, 0);
+      body.SetPosition(new box2d.b2Vec2(0, 0));
+    }
+  }
 
   function constrain( scalar, min, max ) {
     if ( scalar > max ) {
@@ -293,4 +314,27 @@ var SpaceMantis = function SpaceMantis(container, stats) {
   }
 
 	init();
+}
+
+/**
+ * Provides requestAnimationFrame in a cross browser way.
+ * http://paulirish.com/2011/requestanimationframe-for-smart-animating/
+ */
+
+if ( !window.requestAnimationFrame ) {
+
+	window.requestAnimationFrame = ( function() {
+
+		return window.webkitRequestAnimationFrame ||
+		window.mozRequestAnimationFrame ||
+		window.oRequestAnimationFrame ||
+		window.msRequestAnimationFrame ||
+		function( /* function FrameRequestCallback */ callback, /* DOMElement Element */ element ) {
+
+			window.setTimeout( callback, 1000 / 60 );
+
+		};
+
+	} )();
+
 }
