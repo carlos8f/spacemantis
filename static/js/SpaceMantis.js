@@ -60,6 +60,8 @@ var SpaceMantis = function SpaceMantis(container, stats) {
   function run() {
     setInterval(step, 1000/_frameRate);
     render();
+    var info = document.getElementById('info');
+    info.innerHTML = 'Right click: change direction<br />Hold left click: move camera<br />Spacebar: pause';
   }
 
   function pause() {
@@ -173,8 +175,8 @@ var SpaceMantis = function SpaceMantis(container, stats) {
       var cube = new THREE.CubeGeometry( width, height, depth );
 
       var mesh = new THREE.Mesh( cube, material );
-        mesh.position.set(( Math.random() - 0.5 ) * 500,
-        ( Math.random() - 0.5 ) * 500,
+        mesh.position.set(Math.round(( Math.random() - 0.5 ) * 500),
+        Math.round(( Math.random() - 0.5 ) * 500),
         (depth/2) - 3);
 
       //initialize body
