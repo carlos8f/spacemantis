@@ -150,6 +150,7 @@ var SpaceMantis = function SpaceMantis(container, stats) {
 
   function initShip() {
     _ship = addShip( 0, 0, 3 );
+    _velocity.Set(0, -1);
   }
 
   function initPlane() {
@@ -174,7 +175,7 @@ var SpaceMantis = function SpaceMantis(container, stats) {
       var mesh = new THREE.Mesh( cube, material );
         mesh.position.set(( Math.random() - 0.5 ) * 500,
         ( Math.random() - 0.5 ) * 500,
-        0);
+        (depth/2) - 3);
 
       //initialize body
       var bdef=new box2d.b2BodyDef();
