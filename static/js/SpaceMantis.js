@@ -166,9 +166,9 @@ var SpaceMantis = function SpaceMantis(container, stats) {
     var material =  new THREE.MeshLambertMaterial( { color:0x5555ff } );
 
     for( var i = 0; i < 500; i++) {
-      var width = Math.random() * 10 + 2,
-        height = Math.random() * 10 + 2,
-        depth = Math.random() * 10 + 2;
+      var width = Math.round(Math.random() * 10 + 2),
+        height = Math.round(Math.random() * 10 + 2),
+        depth = 6;
 
       var cube = new THREE.CubeGeometry( width, height, depth );
 
