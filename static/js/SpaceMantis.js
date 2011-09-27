@@ -44,10 +44,12 @@ var SpaceMantis = function SpaceMantis(container, stats) {
 
   var _paused;
 
-	function init() {
+  var _emptyVector = new box2d.b2Vec2(0, 0);
+
+	function init(shipGeometry) {
     initScene();
     initBox2d();
-    initShip();
+    initShip(shipGeometry);
 		initView();
     initPlane();
     initObstacles();
@@ -102,31 +104,32 @@ var SpaceMantis = function SpaceMantis(container, stats) {
 		return cube;
 	}
 
-	function addShip( x, y, size ) {
-		var width = size,
-			height = width,
-			depth = height;
+	function addShip( shipGeometry, size ) {
+		var x = 0, y = 0;
 
-    var geometry = new THREE.SphereGeometry( size, 14, 14 ),
-			material = new THREE.MeshLambertMaterial( { color: 0xcc5599, opacity: 1 } ),
-      mesh = new THREE.Mesh( geometry, material );
+    var material = new THREE.MeshLambertMaterial( { color: 0x0055ff, opacity: 1 } ),
+      mesh = new THREE.Mesh( shipGeometry, material );
 
+    mesh.scale.set( size, size, size );
 		mesh.position.x = x;
 		mesh.position.y = y;
 		mesh.position.z = 0;
+    mesh.rotation.x = Math.PI / 2;
 
     //initialize body
     var def=new box2d.b2BodyDef();
     def.type = box2d.b2Body.b2_dynamicBody;
     def.position=new box2d.b2Vec2(x, y);
     //def.angle=math.radians(0); // 0 degrees
-    def.linearDamping=0.2;  //gradually reduces velocity, makes the car reduce speed slowly if neither accelerator nor brake is pressed
+    def.linearDamping=2.0;  //gradually reduces velocity, makes the car reduce speed slowly if neither accelerator nor brake is pressed
     def.bullet=true; //dedicates more time to collision detection - car travelling at high speeds at low framerates otherwise might teleport through obstacles.
     def.angularDamping=0.3;
 
     var body = _world.CreateBody(def);
     var userData = {mesh: mesh};
     body.SetUserData(userData);
+    var massData = {mass: 2.0, center: _emptyVector};
+    body.SetMassData(massData);
 
     //initialize shape
     var fixdef= new box2d.b2FixtureDef();
@@ -150,9 +153,9 @@ var SpaceMantis = function SpaceMantis(container, stats) {
     _scene.fog = new THREE.FogExp2( 0x000000, 0.0045 );
   }
 
-  function initShip() {
-    _ship = addShip( 0, 0, 3 );
-    _velocity.Set(0, -1);
+  function initShip(shipGeometry) {
+    _ship = addShip( shipGeometry, 0.1 );
+    _velocity.Set(0, 1);
   }
 
   function initPlane() {
@@ -178,6 +181,17 @@ var SpaceMantis = function SpaceMantis(container, stats) {
         mesh.position.set(Math.round(( Math.random() - 0.5 ) * 500),
         Math.round(( Math.random() - 0.5 ) * 500),
         (depth/2) - 3);
+
+      var clearArea = 50;
+
+      if (mesh.position.x < clearArea && mesh.position.x > -clearArea) {
+        i--;
+        continue;
+      }
+      if (mesh.position.y < clearArea && mesh.position.y > -clearArea) {
+        i--;
+        continue;
+      }
 
       //initialize body
       var bdef=new box2d.b2BodyDef();
@@ -224,21 +238,21 @@ var SpaceMantis = function SpaceMantis(container, stats) {
     var ambient = new THREE.AmbientLight( 0x555555 );
     _scene.addLight( ambient );
 
-    var directionalLight = new THREE.DirectionalLight( 0xff55ff, 2 );
+    var directionalLight = new THREE.DirectionalLight( 0xffffff, 2 );
     directionalLight.position.x = 2;
     directionalLight.position.y = 1.2;
     directionalLight.position.z = 10;
     directionalLight.position.normalize();
     _scene.addLight( directionalLight );
 
-    directionalLight = new THREE.DirectionalLight( 0xffff55, 1 );
+    directionalLight = new THREE.DirectionalLight( 0xffffff, 1 );
     directionalLight.position.x = - 2;
     directionalLight.position.y = 1.2;
     directionalLight.position.z = - 10;
     directionalLight.position.normalize();
     _scene.addLight( directionalLight );
 
-    var pointLight = new THREE.PointLight( 0xffaa00, 2 );
+    var pointLight = new THREE.PointLight( 0x6666ff, 0.5 );
     pointLight.position.x = 2000;
     pointLight.position.y = 1200;
     pointLight.position.z = 10000;
@@ -289,7 +303,7 @@ var SpaceMantis = function SpaceMantis(container, stats) {
     if (_paused) {
       return;
     }
-    _ship.body.ApplyImpulse(_velocity, new box2d.b2Vec2(0, 0));
+    _ship.body.ApplyImpulse(_velocity, _emptyVector);
 
     _world.Step(_timeStep, _iterations);
     _world.ClearForces();
@@ -301,7 +315,7 @@ var SpaceMantis = function SpaceMantis(container, stats) {
 
     if (_ship.position.x > 250 || _ship.position.x < -250 || _ship.position.y > 250 || _ship.position.y < -250) {
       _ship.position.set(0, 0);
-      body.SetPosition(new box2d.b2Vec2(0, 0));
+      body.SetPosition(_emptyVector);
     }
   }
 
@@ -316,7 +330,9 @@ var SpaceMantis = function SpaceMantis(container, stats) {
     return scalar;
   }
 
-	init();
+  // ship
+  var binLoader = new THREE.BinaryLoader();
+  binLoader.load( { model: '/models/simpleship.js', callback: init } );
 }
 
 /**
