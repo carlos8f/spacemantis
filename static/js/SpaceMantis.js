@@ -1,39 +1,42 @@
 var SpaceMantis = function SpaceMantis(container, stats) {
-	var _self = this,
-		_container = container,
-		_stats = stats,
+  var _self = this,
+    _container = container,
+    _stats = stats,
     box2d = exports; // Poor man's commonjs module!
 
-	var _camera,
-		_scene,
-		_renderer;
+  var _camera,
+    _scene,
+    _renderer;
 
-	var _metrics = {
-		stage: {
-			width: window.innerWidth,
-			height: window.innerHeight
-		},
-		world: {
-			width: window.innerWidth,
-			height: window.innerHeight
-		}
-	}
+  var _metrics = {
+    stage: {
+      width: window.innerWidth,
+      height: window.innerHeight
+    },
+    world: {
+      width: window.innerWidth,
+      height: window.innerHeight
+    }
+  };
 
-	var _frameRate = 60;
+  var _frameRate = 60;
 
-	var _timeStep = 1/_frameRate,
-		_iterations = 1;
+  var _timeStep = 1/_frameRate,
+    _iterations = 1;
 
-	var _world, _ship, _plane, _ray;
+  var _world, _ship, _plane, _ray;
 
-	var _bodies = [];
+  var _bodies = [];
 
-	var _fov = 60,
-		_near = 1,
-		_far = 3000;
+  var _fov = 60,
+    _near = 1,
+    _far = 3000;
 
   var _gravity = 0;
-  var _shipMass = 1.0;
+  var _shipMass = 2.0;
+  var _engineOn = false;
+  var _autoPilot = false;
+  var _damping = 1.0;
 
   var _velocity = new box2d.b2Vec2(0, 0);
 
@@ -41,9 +44,7 @@ var SpaceMantis = function SpaceMantis(container, stats) {
   var _mouse2d = new THREE.Vector3();
   var _mouse3d = new THREE.Vector3();
   var _windowHalfX = window.innerWidth / 2;
-	var _windowHalfY = window.innerHeight / 2;
-
-  var _paused;
+  var _windowHalfY = window.innerHeight / 2;
 
   var _emptyVector = new box2d.b2Vec2(0, 0);
 
@@ -53,74 +54,40 @@ var SpaceMantis = function SpaceMantis(container, stats) {
   var _lastTargetRotation = 0;
   var _halfRotations = 0;
 
-	function init(shipGeometry) {
+  function init(shipGeometry) {
     initScene();
     initBox2d();
     initShip(shipGeometry);
-		initView();
+    initView();
     initPlane();
     initObstacles();
-		initLights();
-		initEvents();
+    initLights();
+    initEvents();
 
-		run();
-	}
+    run();
+  }
 
   function run() {
     setInterval(step, 1000/_frameRate);
     render();
     var info = document.getElementById('info');
-    info.innerHTML = 'Right click: change direction<br />Hold left click: move camera<br />Spacebar: pause';
+    info.innerHTML = 'W: thrust<br />Right click: change direction<br />Left click/drag: move camera';
   }
 
-  function pause() {
-    _paused = true;
-  }
-
-  function unpause() {
-    _paused = false;
-  }
-
-	function initBox2d() {
+  function initBox2d() {
     _world = new box2d.b2World(new box2d.b2Vec2(0, _gravity), false);
-	}
+  }
 
-	function drawWall(x,y,width,height, cX,cY,cZ) {
-		/*
-		 * Create box
-		 */
-		var boxSd = new box2d.b2BoxDef();
-		boxSd.extents.Set(width, height);
-		boxSd.friction = 1;
-		var boxBd = new box2d.b2BodyDef();
-		boxBd.AddShape(boxSd);
-		boxBd.position.Set(x, y);
-
-		_world.CreateBody(boxBd);
-		drawBox(x,y,width,height, cX, cY, cZ);
-	}
-
-	function addCubeVisual(x, y, width, height, depth ) {
-		var geometry = new THREE.CubeGeometry( width, height, depth ),
-			material = new THREE.MeshLambertMaterial( { color: 0x00ff00, opacity: 0.5 } ),
-			cube = new THREE.Mesh( geometry, material );
-
-		cube.position.set( x, y, 0 );
-
-		_scene.addChild( cube );
-		return cube;
-	}
-
-	function addShip( shipGeometry, size ) {
-		var x = 0, y = 0;
+  function addShip( shipGeometry, size ) {
+    var x = 0, y = 0;
 
     var material = new THREE.MeshLambertMaterial( { color: 0x0055ff, opacity: 1 } ),
       mesh = new THREE.Mesh( shipGeometry, material );
 
     mesh.scale.set( size, size, size );
-		mesh.position.x = x;
-		mesh.position.y = y;
-		mesh.position.z = 0;
+    mesh.position.x = x;
+    mesh.position.y = y;
+    mesh.position.z = 0;
     mesh.rotation.x = Math.PI / 2;
 
     //initialize body
@@ -128,7 +95,7 @@ var SpaceMantis = function SpaceMantis(container, stats) {
     def.type = box2d.b2Body.b2_dynamicBody;
     def.position=new box2d.b2Vec2(x, y);
     //def.angle=math.radians(0); // 0 degrees
-    def.linearDamping=2.0;  //gradually reduces velocity, makes the car reduce speed slowly if neither accelerator nor brake is pressed
+    def.linearDamping=_damping;  //gradually reduces velocity, makes the car reduce speed slowly if neither accelerator nor brake is pressed
     def.bullet=true; //dedicates more time to collision detection - car travelling at high speeds at low framerates otherwise might teleport through obstacles.
     def.angularDamping=0.3;
 
@@ -141,9 +108,9 @@ var SpaceMantis = function SpaceMantis(container, stats) {
     //initialize shape
     var fixdef= new box2d.b2FixtureDef();
     fixdef.density = 0.0;
-    fixdef.friction = 0.0; //friction when rubbing against other shapes
-    fixdef.restitution = 0.7;  //amount of force feedback when hitting something. >0 makes the car bounce off, it's fun!
-    fixdef.shape=new box2d.b2CircleShape(size);
+    fixdef.friction = 2.0; //friction when rubbing against other shapes
+    fixdef.restitution = 0.0;  //amount of force feedback when hitting something. >0 makes the car bounce off, it's fun!
+    fixdef.shape=new box2d.b2CircleShape(size * 20);
     //fixdef.shape.SetAsBox(width/2, height/2);
     body.CreateFixture(fixdef);
 
@@ -153,7 +120,7 @@ var SpaceMantis = function SpaceMantis(container, stats) {
     _scene.addChild(mesh);
 
     return userData.mesh;
-	}
+  }
 
   function initScene() {
     _scene = new THREE.Scene();
@@ -211,7 +178,9 @@ var SpaceMantis = function SpaceMantis(container, stats) {
       var fixdef=new box2d.b2FixtureDef;
       fixdef.shape=new box2d.b2PolygonShape();
       fixdef.shape.SetAsBox(width/2, height/2);
-      fixdef.restitution=0.2; //positively bouncy!
+      fixdef.restitution=0.0;
+      fixdef.friction=1.0;
+
       body.CreateFixture(fixdef);
 
       var userData = {mesh: mesh};
@@ -226,22 +195,18 @@ var SpaceMantis = function SpaceMantis(container, stats) {
     }
   }
 
-	function initView() {
+  function initView() {
     _camera = new THREE.FollowCamera( _fov, _metrics.stage.width / _metrics.stage.height, _near, _far, _ship, 80, 10, 200 );
 
     _ray = new THREE.Ray( _camera.position, null );
 
-		_renderer = new THREE.WebGLRenderer( { antialias: true } );
-		_renderer.setSize( _metrics.stage.width, _metrics.stage.height );
+    _renderer = new THREE.WebGLRenderer( { antialias: true } );
+    _renderer.setSize( _metrics.stage.width, _metrics.stage.height );
     _renderer.setClearColorHex( 0x000000, 1 );
+    _container.appendChild(_renderer.domElement);
+  }
 
-		_container.appendChild(_renderer.domElement);
-	}
-
-	function initLights() {
-
-    // LIGHTS
-
+  function initLights() {
     var ambient = new THREE.AmbientLight( 0x555555 );
     _scene.addLight( ambient );
 
@@ -264,7 +229,7 @@ var SpaceMantis = function SpaceMantis(container, stats) {
     pointLight.position.y = 1200;
     pointLight.position.z = 10000;
     _scene.addLight( pointLight );
-	}
+  }
 
   function onMouseDown( event ) {
     if ( event.button == 2 ) {
@@ -291,13 +256,26 @@ var SpaceMantis = function SpaceMantis(container, stats) {
         _targetRotation += _halfRotations * Math.PI*2;
       }
     }
-	};
+  }
 
   function onKeyDown( event ) {
-		switch( event.keyCode ) {
-			case 32: _paused ? unpause() : pause(); break;
-		}
-	}
+    event.preventDefault();
+    event.stopPropagation();
+
+    switch( event.keyCode ) {
+      case 87: /*W*/ _engineOn = true; break;
+      //case 32: /*space*/ _autoPilot = _autoPilot ? false : true; break;
+    }
+  }
+
+  function onKeyUp( event ) {
+    event.preventDefault();
+    event.stopPropagation();
+
+    switch( event.keyCode ) {
+      case 87: /*W*/ _engineOn = false; break;
+    }
+  }
 
   function onResize() {
     _renderer.setSize(window.innerWidth, window.innerHeight);
@@ -309,21 +287,21 @@ var SpaceMantis = function SpaceMantis(container, stats) {
     document.addEventListener( 'contextmenu', function ( event ) { event.preventDefault(); }, false );
     document.addEventListener( 'mousedown', onMouseDown, false );
     document.addEventListener( 'keydown', onKeyDown, false );
+    document.addEventListener( 'keyup', onKeyUp, false );
     window.addEventListener( 'resize', onResize, false );
-	}
+  }
 
-	function render() {
+  function render() {
     requestAnimationFrame(render);
 
-		_renderer.render( _scene, _camera );
-		_stats.update();
-	}
+    _renderer.render( _scene, _camera );
+    _stats.update();
+  }
 
   function step() {
-    if (_paused) {
-      return;
+    if (_engineOn || _autoPilot) {
+      _ship.body.ApplyImpulse(_velocity, _emptyVector);
     }
-    _ship.body.ApplyImpulse(_velocity, _emptyVector);
 
     _world.Step(_timeStep, _iterations);
     _world.ClearForces();
@@ -340,17 +318,6 @@ var SpaceMantis = function SpaceMantis(container, stats) {
     }
   }
 
-  function constrain( scalar, min, max ) {
-    if ( scalar > max ) {
-      return max;
-    }
-    else if ( scalar < min ) {
-      return min;
-    }
-
-    return scalar;
-  }
-
   // ship
   var binLoader = new THREE.BinaryLoader();
   binLoader.load( { model: '/models/simpleship.js', callback: init } );
@@ -362,19 +329,13 @@ var SpaceMantis = function SpaceMantis(container, stats) {
  */
 
 if ( !window.requestAnimationFrame ) {
-
-	window.requestAnimationFrame = ( function() {
-
-		return window.webkitRequestAnimationFrame ||
-		window.mozRequestAnimationFrame ||
-		window.oRequestAnimationFrame ||
-		window.msRequestAnimationFrame ||
-		function( /* function FrameRequestCallback */ callback, /* DOMElement Element */ element ) {
-
-			window.setTimeout( callback, 1000 / 60 );
-
-		};
-
-	} )();
-
+  window.requestAnimationFrame = ( function() {
+    return window.webkitRequestAnimationFrame ||
+      window.mozRequestAnimationFrame ||
+      window.oRequestAnimationFrame ||
+      window.msRequestAnimationFrame ||
+      function( /* function FrameRequestCallback */ callback, /* DOMElement Element */ element ) {
+	window.setTimeout( callback, 1000 / 60 );
+      };
+  })();
 }
