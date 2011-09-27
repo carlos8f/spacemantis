@@ -33,6 +33,7 @@ var SpaceMantis = function SpaceMantis(container, stats) {
 		_far = 3000;
 
   var _gravity = 0;
+  var _shipMass = 1.0;
 
   var _velocity = new box2d.b2Vec2(0, 0);
 
@@ -45,6 +46,12 @@ var SpaceMantis = function SpaceMantis(container, stats) {
   var _paused;
 
   var _emptyVector = new box2d.b2Vec2(0, 0);
+
+  var _rotationSpeed = 0.1;
+
+  var _targetRotation = 0;
+  var _lastTargetRotation = 0;
+  var _halfRotations = 0;
 
 	function init(shipGeometry) {
     initScene();
@@ -128,7 +135,7 @@ var SpaceMantis = function SpaceMantis(container, stats) {
     var body = _world.CreateBody(def);
     var userData = {mesh: mesh};
     body.SetUserData(userData);
-    var massData = {mass: 2.0, center: _emptyVector};
+    var massData = {mass: _shipMass, center: _emptyVector};
     body.SetMassData(massData);
 
     //initialize shape
@@ -268,7 +275,20 @@ var SpaceMantis = function SpaceMantis(container, stats) {
       if ( intersects.length > 0 ) {
         _velocity.Set(intersects[0].point.x - _ship.position.x, intersects[0].point.y - _ship.position.y);
         _velocity.Normalize();
-        //_velocity.Multiply(0.6);
+        _targetRotation = -Math.atan2(_velocity.x, _velocity.y);
+
+        var diff = _targetRotation - _lastTargetRotation;
+
+        // Correct an angle greater than 180.
+        if (diff > Math.PI) {
+          _halfRotations--;
+        }
+        else if (diff < -Math.PI) {
+          _halfRotations++;
+        }
+
+        _lastTargetRotation = _targetRotation;
+        _targetRotation += _halfRotations * Math.PI*2;
       }
     }
 	};
@@ -311,6 +331,7 @@ var SpaceMantis = function SpaceMantis(container, stats) {
     var body = _ship.body;
     var position = body.GetPosition();
     _ship.position.set(position.x, position.y, 0);
+    _ship.rotation.y += (_targetRotation - _ship.rotation.y) * _rotationSpeed;
     //_ship.rotation.z = body.GetAngle() * (Math.PI / 180);
 
     if (_ship.position.x > 250 || _ship.position.x < -250 || _ship.position.y > 250 || _ship.position.y < -250) {
