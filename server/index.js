@@ -60,11 +60,14 @@ io.sockets.on('connection', function (socket) {
     state: {
       c: 0x0055ff, // Color
       e: 0, // Engine on
-      r: Math.PI / 2, // Rotation (up)
+      r: 0, // Rotation (up)
       x: (Math.random() - 0.5) * 100,
       y: (Math.random() - 0.5) * 100,
       d: 0, // Destroyed?
-      m: 2.0 // Ship mass
+      m: 2.0, // Ship masse
+      rs: 0.1, // Rotation speed
+      vx: 0, // Velocity X
+      vy: 1 // Velocity Y
     }
   };
   clients[id] = client;

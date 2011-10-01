@@ -1,6 +1,5 @@
 var SpaceMantis = function SpaceMantis(container, stats) {
-  var _self = this,
-    _container = container,
+  var _container = container,
     _stats = stats,
     box2d = exports; // Poor man's commonjs module!
 
@@ -36,11 +35,9 @@ var SpaceMantis = function SpaceMantis(container, stats) {
     _far = 3000;
 
   var _gravity = 0;
-  var _engineOn = false;
-  var _autoPilot = false;
   var _damping = 1.0;
 
-  var _velocity = new box2d.b2Vec2(0, 0);
+  var _velocity = new box2d.b2Vec2(0, 1);
 
   var _projector = new THREE.Projector();
   var _mouse2d = new THREE.Vector3();
@@ -50,9 +47,6 @@ var SpaceMantis = function SpaceMantis(container, stats) {
 
   var _emptyVector = new box2d.b2Vec2(0, 0);
 
-  var _rotationSpeed = 0.1;
-
-  var _targetRotation = 0;
   var _lastTargetRotation = 0;
   var _halfRotations = 0;
 
@@ -82,9 +76,9 @@ var SpaceMantis = function SpaceMantis(container, stats) {
     _world = new box2d.b2World(new box2d.b2Vec2(0, _gravity), false);
   }
 
-  function createDynamicBody( snapshot ) {
-    var material = new THREE.MeshLambertMaterial( { color: 0x0055ff, opacity: 1 } ),
-      mesh = new THREE.Mesh( _shipGeometry, material );
+  function createDynamicBody(snapshot) {
+    var material = new THREE.MeshLambertMaterial({color: snapshot.state.c, opacity: 1}),
+      mesh = new THREE.Mesh(_shipGeometry, material);
 
     var size = 0.1; // Size matters
 
@@ -92,7 +86,7 @@ var SpaceMantis = function SpaceMantis(container, stats) {
     mesh.position.x = snapshot.state.x;
     mesh.position.y = snapshot.state.y;
     mesh.position.z = 0; // It's a 2d game.
-    mesh.rotation.x = snapshot.state.r;
+    mesh.rotation.x = Math.PI / 2; // Pointing up.
 
     //initialize body
     var def=new box2d.b2BodyDef();
@@ -119,6 +113,8 @@ var SpaceMantis = function SpaceMantis(container, stats) {
     body.CreateFixture(fixdef);
 
     _scene.addChild(mesh);
+
+    body.state = snapshot.state;
 
     return body;
   }
@@ -194,11 +190,6 @@ var SpaceMantis = function SpaceMantis(container, stats) {
 
       body.CreateFixture(fixdef);
 
-      var userData = {mesh: mesh};
-      body.SetUserData(userData);
-
-      userData.mesh.body = body;
-
       mesh.updateMatrix();
       mesh.matrixAutoUpdate = false;
       _scene.addChild(mesh);
@@ -206,9 +197,9 @@ var SpaceMantis = function SpaceMantis(container, stats) {
   }
 
   function initView() {
-    _renderer = new THREE.WebGLRenderer( { antialias: true } );
-    _renderer.setSize( _metrics.stage.width, _metrics.stage.height );
-    _renderer.setClearColorHex( 0x000000, 1 );
+    _renderer = new THREE.WebGLRenderer({ antialias: true });
+    _renderer.setSize(_metrics.stage.width, _metrics.stage.height);
+    _renderer.setClearColorHex(0x000000, 1);
     _container.appendChild(_renderer.domElement);
   }
 
@@ -216,39 +207,41 @@ var SpaceMantis = function SpaceMantis(container, stats) {
     var ambient = new THREE.AmbientLight( 0x555555 );
     _scene.addLight( ambient );
 
-    var directionalLight = new THREE.DirectionalLight( 0xffffff, 2 );
+    var directionalLight = new THREE.DirectionalLight(0xffffff, 2);
     directionalLight.position.x = 2;
     directionalLight.position.y = 1.2;
     directionalLight.position.z = 10;
     directionalLight.position.normalize();
     _scene.addLight( directionalLight );
 
-    directionalLight = new THREE.DirectionalLight( 0xffffff, 1 );
-    directionalLight.position.x = - 2;
+    directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+    directionalLight.position.x = -2;
     directionalLight.position.y = 1.2;
-    directionalLight.position.z = - 10;
+    directionalLight.position.z = -10;
     directionalLight.position.normalize();
     _scene.addLight( directionalLight );
 
-    var pointLight = new THREE.PointLight( 0x6666ff, 0.5 );
+    var pointLight = new THREE.PointLight(0x6666ff, 0.5);
     pointLight.position.x = 2000;
     pointLight.position.y = 1200;
     pointLight.position.z = 10000;
-    _scene.addLight( pointLight );
+    _scene.addLight(pointLight);
   }
 
   function onMouseDown( event ) {
     if ( event.button == 2 ) {
-      _mouse2d.set( (event.clientX - _windowHalfX) / _metrics.stage.width, - ((event.clientY - _windowHalfY) / _metrics.stage.height) ).multiplyScalar( 2 );
+      _mouse2d.set((event.clientX - _windowHalfX) / _metrics.stage.width, - ((event.clientY - _windowHalfY) / _metrics.stage.height)).multiplyScalar(2);
       _mouse3d = _projector.unprojectVector( _mouse2d.clone(), _camera );
       _ray.direction = _mouse3d.subSelf( _camera.position ).normalize();
-      var intersects = _ray.intersectObject( _plane );
-      if ( intersects.length > 0 ) {
-        _velocity.Set(intersects[0].point.x - _ship.position.x, intersects[0].point.y - _ship.userData.mesh.position.y);
+      var intersects = _ray.intersectObject(_plane);
+      if (intersects.length > 0) {
+        _velocity.Set(intersects[0].point.x - _ship.state.x, intersects[0].point.y - _ship.state.y);
         _velocity.Normalize();
-        _targetRotation = -Math.atan2(_velocity.x, _velocity.y);
+	_ship.state.vx = _velocity.x;
+	_ship.state.vy = _velocity.y;
+        _ship.state.r = -Math.atan2(_ship.state.vx, _ship.state.vy);
 
-        var diff = _targetRotation - _lastTargetRotation;
+        var diff = _ship.state.r - _lastTargetRotation;
 
         // Correct an angle greater than 180.
         if (diff > Math.PI) {
@@ -258,14 +251,15 @@ var SpaceMantis = function SpaceMantis(container, stats) {
           _halfRotations++;
         }
 
-        _lastTargetRotation = _targetRotation;
-        _targetRotation += _halfRotations * Math.PI*2;
+        _lastTargetRotation = _ship.state.r;
+        _ship.state.r += _halfRotations * Math.PI * 2;
+	sendState();
       }
     }
   }
 
   function sendState() {
-
+    _socket.emit('move', _ship.state);
   }
 
   function onKeyDown( event ) {
@@ -273,7 +267,7 @@ var SpaceMantis = function SpaceMantis(container, stats) {
     event.stopPropagation();
 
     switch( event.keyCode ) {
-      case 87: /*W*/ _engineOn = true; break;
+      case 87: /*W*/ _ship.state.e = 1; sendState(); break;
       //case 32: /*space*/ _autoPilot = _autoPilot ? false : true; break;
     }
   }
@@ -283,7 +277,7 @@ var SpaceMantis = function SpaceMantis(container, stats) {
     event.stopPropagation();
 
     switch( event.keyCode ) {
-      case 87: /*W*/ _engineOn = false; break;
+      case 87: /*W*/ _ship.state.e = 0; sendState(); break;
     }
   }
 
@@ -305,13 +299,12 @@ var SpaceMantis = function SpaceMantis(container, stats) {
     requestAnimationFrame(render);
 
     if (typeof _ship != 'undefined' && typeof _camera == 'undefined') {
-      var userData = _ship.GetUserData();
-      _camera = new THREE.FollowCamera( _fov, _metrics.stage.width / _metrics.stage.height, _near, _far, userData.mesh, 80, 10, 200 );
-      _ray = new THREE.Ray( _camera.position, null );
+      _camera = new THREE.FollowCamera(_fov, _metrics.stage.width / _metrics.stage.height, _near, _far, _ship.m_userData.mesh, 80, 10, 200);
+      _ray = new THREE.Ray(_camera.position, null);
     }
 
     if (typeof _camera != 'undefined') {
-      _renderer.render( _scene, _camera );
+      _renderer.render(_scene, _camera);
     }
 
     _stats.update();
@@ -319,19 +312,18 @@ var SpaceMantis = function SpaceMantis(container, stats) {
 
   function step() {
     if (typeof _ship != 'undefined') {
-      if (_engineOn || _autoPilot) {
-        _ship.ApplyImpulse(_velocity, _emptyVector);
-      }
-      var position = _ship.GetPosition();
-      var userData = _ship.GetUserData();
-      var mesh = userData.mesh;
-      mesh.position.set(position.x, position.y, 0);
-      mesh.rotation.y += (_targetRotation - mesh.rotation.y) * _rotationSpeed;
-      //_ship.rotation.z = body.GetAngle() * (Math.PI / 180);
-
-      if (mesh.position.x > 250 || mesh.position.x < -250 || mesh.position.y > 250 || mesh.position.y < -250) {
-        mesh.position.set(0, 0);
-        _ship.SetPosition(_emptyVector);
+      var numDynamicBodies = _dynamicBodies.length;
+      for (id in _dynamicBodies) {
+	var body = _dynamicBodies[id];
+	if (body.state.e == 1) {
+	  body.ApplyImpulse(new box2d.b2Vec2(body.state.vx, body.state.vy), _emptyVector);
+	}
+	var position = body.GetPosition();
+	var mesh = _ship.m_userData.mesh;
+	body.state.x = position.x;
+	body.state.y = position.y;
+	mesh.position.set(position.x, position.y, 0);
+	mesh.rotation.y += (body.state.r - mesh.rotation.y) * body.state.rs;
       }
     }
 
@@ -356,7 +348,7 @@ if ( !window.requestAnimationFrame ) {
       window.oRequestAnimationFrame ||
       window.msRequestAnimationFrame ||
       function( /* function FrameRequestCallback */ callback, /* DOMElement Element */ element ) {
-	window.setTimeout( callback, 1000 / 60 );
+	window.setTimeout( callback, 1000 / _frameRate );
       };
   })();
 }
