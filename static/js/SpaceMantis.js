@@ -26,14 +26,16 @@ var SpaceMantis = function SpaceMantis(container, stats) {
 
   var _world, _ship, _plane, _ray;
 
-  var _bodies = [];
+  var _dynamicBodies = {};
+
+  var _socket;
+  var _myId;
 
   var _fov = 60,
     _near = 1,
     _far = 3000;
 
   var _gravity = 0;
-  var _shipMass = 2.0;
   var _engineOn = false;
   var _autoPilot = false;
   var _damping = 1.0;
@@ -54,13 +56,15 @@ var SpaceMantis = function SpaceMantis(container, stats) {
   var _lastTargetRotation = 0;
   var _halfRotations = 0;
 
+  var _shipGeometry;
+
   function init(shipGeometry) {
+    _shipGeometry = shipGeometry;
     initScene();
     initBox2d();
-    initShip(shipGeometry);
+    initSocket();
     initView();
     initPlane();
-    initObstacles();
     initLights();
     initEvents();
 
@@ -78,58 +82,81 @@ var SpaceMantis = function SpaceMantis(container, stats) {
     _world = new box2d.b2World(new box2d.b2Vec2(0, _gravity), false);
   }
 
-  function addShip( shipGeometry, size ) {
-    var x = 0, y = 0;
-
+  function createDynamicBody( snapshot ) {
     var material = new THREE.MeshLambertMaterial( { color: 0x0055ff, opacity: 1 } ),
-      mesh = new THREE.Mesh( shipGeometry, material );
+      mesh = new THREE.Mesh( _shipGeometry, material );
+
+    var size = 0.1; // Size matters
 
     mesh.scale.set( size, size, size );
-    mesh.position.x = x;
-    mesh.position.y = y;
-    mesh.position.z = 0;
-    mesh.rotation.x = Math.PI / 2;
+    mesh.position.x = snapshot.state.x;
+    mesh.position.y = snapshot.state.y;
+    mesh.position.z = 0; // It's a 2d game.
+    mesh.rotation.x = snapshot.state.r;
 
     //initialize body
     var def=new box2d.b2BodyDef();
     def.type = box2d.b2Body.b2_dynamicBody;
-    def.position=new box2d.b2Vec2(x, y);
+    def.position = new box2d.b2Vec2(snapshot.state.x, snapshot.state.y);
     //def.angle=math.radians(0); // 0 degrees
-    def.linearDamping=_damping;  //gradually reduces velocity, makes the car reduce speed slowly if neither accelerator nor brake is pressed
-    def.bullet=true; //dedicates more time to collision detection - car travelling at high speeds at low framerates otherwise might teleport through obstacles.
-    def.angularDamping=0.3;
+    def.linearDamping = _damping;  //gradually reduces velocity, makes the car reduce speed slowly if neither accelerator nor brake is pressed
+    def.bullet = true; //dedicates more time to collision detection - car travelling at high speeds at low framerates otherwise might teleport through obstacles.
+    def.angularDamping = 0.3;
 
     var body = _world.CreateBody(def);
     var userData = {mesh: mesh};
     body.SetUserData(userData);
-    var massData = {mass: _shipMass, center: _emptyVector};
+    var massData = {mass: snapshot.state.m, center: _emptyVector};
     body.SetMassData(massData);
 
     //initialize shape
     var fixdef= new box2d.b2FixtureDef();
     fixdef.density = 0.0;
-    fixdef.friction = 2.0; //friction when rubbing against other shapes
-    fixdef.restitution = 0.0;  //amount of force feedback when hitting something. >0 makes the car bounce off, it's fun!
-    fixdef.shape=new box2d.b2CircleShape(size * 20);
+    fixdef.friction = 1.0; //friction when rubbing against other shapes
+    fixdef.restitution = 0.3;  //amount of force feedback when hitting something. >0 makes the car bounce off, it's fun!
+    fixdef.shape = new box2d.b2CircleShape(size * 20);
     //fixdef.shape.SetAsBox(width/2, height/2);
     body.CreateFixture(fixdef);
 
-    _bodies.push( body );
-
-    userData.mesh.body = body;
     _scene.addChild(mesh);
 
-    return userData.mesh;
+    return body;
+  }
+
+  function initSocket() {
+    _socket = io.connect();
+    _socket.on('join', function (data) {
+      _myId = data.id;
+      initObstacles(data.obstacles);
+    });
+    _socket.on('snapshot', function (snapshot) {
+      if (typeof _myId != 'undefined') {
+        for (var i in snapshot) {
+          processSnapshot(snapshot[i]);
+        }
+      }
+    });
+  }
+
+  function processSnapshot(snapshot) {
+    var id = snapshot.id;
+    if (typeof _dynamicBodies[id] == 'undefined' && snapshot.state.d == 0) {
+      _dynamicBodies[id] = createDynamicBody(snapshot);
+      if (id == _myId) {
+        _ship = _dynamicBodies[id];
+      }
+    }
+    else if (snapshot.state.d == 1) {
+      destroyBody(id);
+    }
+    else if (id != _myId) {
+      _dynamicBodies[id].state = snapshot.state;
+    }
   }
 
   function initScene() {
     _scene = new THREE.Scene();
     _scene.fog = new THREE.FogExp2( 0x000000, 0.0045 );
-  }
-
-  function initShip(shipGeometry) {
-    _ship = addShip( shipGeometry, 0.1 );
-    _velocity.Set(0, 1);
   }
 
   function initPlane() {
@@ -140,32 +167,16 @@ var SpaceMantis = function SpaceMantis(container, stats) {
     // @todo: set up an edgechain for plane bounds.
   }
 
-  function initObstacles() {
+  function initObstacles(obstacles) {
+    var obstaclesLength = obstacles.length;
 
-    var material =  new THREE.MeshLambertMaterial( { color:0x5555ff } );
+    for ( var i = 0; i < obstaclesLength; i++) {
+      var data = obstacles[i];
 
-    for( var i = 0; i < 500; i++) {
-      var width = Math.round(Math.random() * 10 + 2),
-        height = Math.round(Math.random() * 10 + 2),
-        depth = 6;
-
-      var cube = new THREE.CubeGeometry( width, height, depth );
-
+      var material =  new THREE.MeshLambertMaterial( { color: data.c } );
+      var cube = new THREE.CubeGeometry( data.w, data.h, data.d );
       var mesh = new THREE.Mesh( cube, material );
-        mesh.position.set(Math.round(( Math.random() - 0.5 ) * 500),
-        Math.round(( Math.random() - 0.5 ) * 500),
-        (depth/2) - 3);
-
-      var clearArea = 50;
-
-      if (mesh.position.x < clearArea && mesh.position.x > -clearArea) {
-        i--;
-        continue;
-      }
-      if (mesh.position.y < clearArea && mesh.position.y > -clearArea) {
-        i--;
-        continue;
-      }
+      mesh.position.set(data.x, data.y, data.z);
 
       //initialize body
       var bdef=new box2d.b2BodyDef();
@@ -175,11 +186,11 @@ var SpaceMantis = function SpaceMantis(container, stats) {
       var body = _world.CreateBody(bdef);
 
       //initialize shape
-      var fixdef=new box2d.b2FixtureDef;
-      fixdef.shape=new box2d.b2PolygonShape();
-      fixdef.shape.SetAsBox(width/2, height/2);
-      fixdef.restitution=0.0;
-      fixdef.friction=1.0;
+      var fixdef = new box2d.b2FixtureDef;
+      fixdef.shape = new box2d.b2PolygonShape();
+      fixdef.shape.SetAsBox(data.w/2, data.h/2);
+      fixdef.restitution = 0.0;
+      fixdef.friction = 1.0;
 
       body.CreateFixture(fixdef);
 
@@ -190,16 +201,11 @@ var SpaceMantis = function SpaceMantis(container, stats) {
 
       mesh.updateMatrix();
       mesh.matrixAutoUpdate = false;
-      _scene.addChild( mesh );
-
+      _scene.addChild(mesh);
     }
   }
 
   function initView() {
-    _camera = new THREE.FollowCamera( _fov, _metrics.stage.width / _metrics.stage.height, _near, _far, _ship, 80, 10, 200 );
-
-    _ray = new THREE.Ray( _camera.position, null );
-
     _renderer = new THREE.WebGLRenderer( { antialias: true } );
     _renderer.setSize( _metrics.stage.width, _metrics.stage.height );
     _renderer.setClearColorHex( 0x000000, 1 );
@@ -238,7 +244,7 @@ var SpaceMantis = function SpaceMantis(container, stats) {
       _ray.direction = _mouse3d.subSelf( _camera.position ).normalize();
       var intersects = _ray.intersectObject( _plane );
       if ( intersects.length > 0 ) {
-        _velocity.Set(intersects[0].point.x - _ship.position.x, intersects[0].point.y - _ship.position.y);
+        _velocity.Set(intersects[0].point.x - _ship.position.x, intersects[0].point.y - _ship.userData.mesh.position.y);
         _velocity.Normalize();
         _targetRotation = -Math.atan2(_velocity.x, _velocity.y);
 
@@ -256,6 +262,10 @@ var SpaceMantis = function SpaceMantis(container, stats) {
         _targetRotation += _halfRotations * Math.PI*2;
       }
     }
+  }
+
+  function sendState() {
+
   }
 
   function onKeyDown( event ) {
@@ -294,28 +304,39 @@ var SpaceMantis = function SpaceMantis(container, stats) {
   function render() {
     requestAnimationFrame(render);
 
-    _renderer.render( _scene, _camera );
+    if (typeof _ship != 'undefined' && typeof _camera == 'undefined') {
+      var userData = _ship.GetUserData();
+      _camera = new THREE.FollowCamera( _fov, _metrics.stage.width / _metrics.stage.height, _near, _far, userData.mesh, 80, 10, 200 );
+      _ray = new THREE.Ray( _camera.position, null );
+    }
+
+    if (typeof _camera != 'undefined') {
+      _renderer.render( _scene, _camera );
+    }
+
     _stats.update();
   }
 
   function step() {
-    if (_engineOn || _autoPilot) {
-      _ship.body.ApplyImpulse(_velocity, _emptyVector);
+    if (typeof _ship != 'undefined') {
+      if (_engineOn || _autoPilot) {
+        _ship.ApplyImpulse(_velocity, _emptyVector);
+      }
+      var position = _ship.GetPosition();
+      var userData = _ship.GetUserData();
+      var mesh = userData.mesh;
+      mesh.position.set(position.x, position.y, 0);
+      mesh.rotation.y += (_targetRotation - mesh.rotation.y) * _rotationSpeed;
+      //_ship.rotation.z = body.GetAngle() * (Math.PI / 180);
+
+      if (mesh.position.x > 250 || mesh.position.x < -250 || mesh.position.y > 250 || mesh.position.y < -250) {
+        mesh.position.set(0, 0);
+        _ship.SetPosition(_emptyVector);
+      }
     }
 
     _world.Step(_timeStep, _iterations);
     _world.ClearForces();
-
-    var body = _ship.body;
-    var position = body.GetPosition();
-    _ship.position.set(position.x, position.y, 0);
-    _ship.rotation.y += (_targetRotation - _ship.rotation.y) * _rotationSpeed;
-    //_ship.rotation.z = body.GetAngle() * (Math.PI / 180);
-
-    if (_ship.position.x > 250 || _ship.position.x < -250 || _ship.position.y > 250 || _ship.position.y < -250) {
-      _ship.position.set(0, 0);
-      body.SetPosition(_emptyVector);
-    }
   }
 
   // ship
