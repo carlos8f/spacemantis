@@ -91,7 +91,6 @@ var SpaceMantis = function SpaceMantis(container, stats) {
     //def.angle=math.radians(0); // 0 degrees
     def.linearDamping = _damping;  //gradually reduces velocity, makes the car reduce speed slowly if neither accelerator nor brake is pressed
     def.bullet = true; //dedicates more time to collision detection - car travelling at high speeds at low framerates otherwise might teleport through obstacles.
-    def.angularDamping = 0.3;
 
     var body = _world.CreateBody(def);
     var userData = {mesh: mesh, rs: client.rs};
@@ -136,7 +135,7 @@ var SpaceMantis = function SpaceMantis(container, stats) {
     _socket.on('leave', function(id) {
       var body = _dynamicBodies[id];
       _scene.removeChild(body.m_userData.mesh);
-      body.Destroy();
+      _world.DestroyBody(_dynamicBodies[id]);
       delete _dynamicBodies[id];
     });
     _socket.on('snapshot', function (snapshot) {
