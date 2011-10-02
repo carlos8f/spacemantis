@@ -117,7 +117,10 @@ io.sockets.on('connection', function (socket) {
 
   socket.on('move', function(state) {
     // TODO: check game rules to ensure a valid move.
-    client.state = state;
+    for (var prop in state) {
+      client.state[prop] = state[prop];
+    }
+    dynamicBodies[id].SetPosition(new Box2D.b2Vec2(state.x, state.y));
   });
   socket.on('disconnect', function() {
     _world.DestroyBody(dynamicBodies[id]);

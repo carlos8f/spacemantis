@@ -93,15 +93,6 @@ var SpaceMantis = function SpaceMantis(container, stats) {
     mesh.rotation.x = Math.PI / 2; // Pointing up.
     _scene.addChild(mesh);
 
-    var ghostMaterial = new THREE.MeshLambertMaterial({color: client.c, opacity: 0.5})
-    var ghostMesh = new THREE.Mesh(_shipGeometry, ghostMaterial);
-    ghostMesh.scale.set( size, size, size );
-    ghostMesh.position.x = client.state.x;
-    ghostMesh.position.y = client.state.y;
-    ghostMesh.position.z = 0; // It's a 2d game.
-    ghostMesh.rotation.x = Math.PI / 2; // Pointing up.
-    _scene.addChild(ghostMesh);
-
     //initialize body
     var def=new Box2D.b2BodyDef();
     def.type = Box2D.b2Body.b2_dynamicBody;
@@ -111,7 +102,7 @@ var SpaceMantis = function SpaceMantis(container, stats) {
     def.bullet = true; //dedicates more time to collision detection - car travelling at high speeds at low framerates otherwise might teleport through obstacles.
 
     var body = _world.CreateBody(def);
-    var userData = {mesh: mesh, ghostMesh: ghostMesh, rs: client.rs};
+    var userData = {mesh: mesh, rs: client.rs};
     body.SetUserData(userData);
     var massData = {mass: client.m, center: _emptyVector};
     body.SetMassData(massData);
@@ -152,7 +143,6 @@ var SpaceMantis = function SpaceMantis(container, stats) {
     _socket.on('leave', function(id) {
       var body = _dynamicBodies[id];
       _scene.removeChild(body.m_userData.mesh);
-      _scene.removeChild(body.m_userData.ghostMesh);
       _world.DestroyBody(_dynamicBodies[id]);
       delete _dynamicBodies[id];
     });
@@ -166,21 +156,13 @@ var SpaceMantis = function SpaceMantis(container, stats) {
 	  for (var prop in delta) {
 	    state[prop] = delta[prop];
 	  }
-	}
-	var serverDiff = new Box2D.b2Vec2(delta.x, delta.y);
-	serverDiff.Subtract(_dynamicBodies[id].GetPosition());
-	var length = serverDiff.Length();
-	if (length > _correctionThreshold) {
-	  _dynamicBodies[id].m_userData.mesh.position.set(delta.x, delta.y, 0);
-	  _dynamicBodies[id].SetPosition(new Box2D.b2Vec2(delta.x, delta.y));
-	  console.log('corrected ' + id + ' by ' + length + '!');
-	}
-
-	// Illustrate the server position with a ghost image.
-	var ghostMesh = _dynamicBodies[id].m_userData.ghostMesh;
-	ghostMesh.position.set(delta.x, delta.y, 0);
-	if (delta.hasOwnProperty('r')) {
-	  ghostMesh.rotation.y = delta.r;
+	  // Correct other ship positions with server snapshot.
+	  var serverDiff = new Box2D.b2Vec2(delta.x, delta.y);
+	  serverDiff.Subtract(_dynamicBodies[id].GetPosition());
+	  var length = serverDiff.Length();
+	  if (length > _correctionThreshold) {
+	    body.SetPosition(new Box2D.b2Vec2(delta.x, delta.y));
+	  }
 	}
       }
     });
@@ -306,14 +288,17 @@ var SpaceMantis = function SpaceMantis(container, stats) {
 
   function move() {
     var changed = false;
+    var delta = {};
     for (var prop in _ship.state) {
       if (prop != 'x' && prop != 'y' && _ship.state[prop] != _lastState[prop]) {
 	changed = true;
-	_lastState[prop] = _ship.state[prop];
+	_lastState[prop] = delta[prop] = _ship.state[prop];
       }
     }
     if (changed) {
-      _socket.emit('move', _ship.state);
+      delta.x = _ship.m_xf.position.x;
+      delta.y = _ship.m_xf.position.y;
+      _socket.emit('move', delta);
     }
   }
 
