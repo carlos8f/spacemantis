@@ -38,6 +38,8 @@ var SpaceMantis = function SpaceMantis(container, stats) {
 
   var _shipGeometry;
 
+  var _correctionThreshold = 10, _syncing = false, _serverPos;
+
   function updateMetrics() {
     _windowWidth = window.innerWidth;
     _windowHeight = window.innerHeight;
@@ -136,6 +138,7 @@ var SpaceMantis = function SpaceMantis(container, stats) {
 	_dynamicBodies[id] = createDynamicBody(data.clients[id]);
 	if (id == _myId) {
 	  _ship = _dynamicBodies[id];
+	  _serverPos = _ship.GetPosition();
 	  _camera = new THREE.FollowCamera(_fov, _windowWidth / _windowHeight, _near, _far, _ship.m_userData.mesh, 80, 10, 200);
 	  _ray = new THREE.Ray(_camera.position, null);
 	  run();
@@ -154,18 +157,23 @@ var SpaceMantis = function SpaceMantis(container, stats) {
     _socket.on('snapshot', function(snapshot) {
       for (var id in snapshot) {
 	var delta = snapshot[id];
-	var bodyState = _dynamicBodies[id].state;
+	var body = _dynamicBodies[id];
+	var state = body.state;
 	if (id != _myId) {
 	  // Sync the state of other ships.
 	  for (var prop in delta) {
-	    bodyState[prop] = delta[prop];
+	    state[prop] = delta[prop];
 	  }
 	}
-	else {
-	  // For our own ship, we only care about correcting our position.
-	  bodyState.x = delta.x;
-	  bodyState.y = delta.y;
+	var serverDiff = new Box2D.b2Vec2(delta.x, delta.y);
+	serverDiff.Subtract(_dynamicBodies[id].GetPosition());
+	var length = serverDiff.Length();
+	if (length > _correctionThreshold) {
+	  _dynamicBodies[id].m_userData.mesh.position.set(delta.x, delta.y, 0);
+	  _dynamicBodies[id].SetPosition(new Box2D.b2Vec2(delta.x, delta.y));
+	  console.log('corrected ' + id + ' by ' + length + '!');
 	}
+
 	// Illustrate the server position with a ghost image.
 	var ghostMesh = _dynamicBodies[id].m_userData.ghostMesh;
 	ghostMesh.position.set(delta.x, delta.y, 0);
@@ -176,15 +184,13 @@ var SpaceMantis = function SpaceMantis(container, stats) {
     });
     _socket.on('sync', function(data) {
       // Correct object positions using server data.
-      /*
       for (var id in data.clients) {
 	var client = data.clients[id];
 	_dynamicBodies[id].m_userData.mesh.position.set(client.state.x, client.state.y, 0);
         _dynamicBodies[id].SetPosition(new Box2D.b2Vec2(client.state.x, client.state.y));
 	_dynamicBodies[id].state = client.state;
-	console.log('Correcting ' + id + ' to ' + client.state.x + ', ' + client.state.y + '!');
       }
-      */
+      _syncing = false;
     });
   }
 
@@ -335,6 +341,7 @@ var SpaceMantis = function SpaceMantis(container, stats) {
   }
 
   function step() {
+    if (_syncing) return;
     for (var id in _dynamicBodies) {
       var body = _dynamicBodies[id];
       if (body.state.e == 1) {
@@ -342,12 +349,6 @@ var SpaceMantis = function SpaceMantis(container, stats) {
       }
       var position = body.m_xf.position;
       var mesh = body.m_userData.mesh;
-      var xDiff = position.x - body.state.x;
-      var yDiff = position.y - body.state.y;
-      if (xDiff > 20 || yDiff > 20) {
-	// Looks like we got a little out of sync, request a complete snapshot.
-	_socket.emit('sync');
-      }
       mesh.position.x = position.x;
       mesh.position.y = position.y;
       mesh.rotation.y += (body.state.r - mesh.rotation.y) * body.m_userData.rs;
