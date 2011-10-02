@@ -122,7 +122,7 @@ io.sockets.on('connection', function (socket) {
   socket.on('disconnect', function() {
     _world.DestroyBody(dynamicBodies[id]);
     delete dynamicBodies[id];
-    delete client;
+    delete clients[id];
     // Broadcast disconnect
     socket.broadcast.emit('leave', id);
   });
