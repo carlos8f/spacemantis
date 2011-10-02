@@ -129,8 +129,8 @@ io.sockets.on('connection', function (socket) {
     // Broadcast disconnect
     socket.broadcast.emit('leave', id);
   });
-  socket.on('sync', function() {
-    socket.emit('sync', {clients: clients});
+  socket.on('ping', function(timestamp, fn) {
+    fn(timestamp);
   });
   // Send initial data to client: world obstacles and complete client snapshots.
   socket.emit('init', {id: id, clients: clients, obstacles: obstacles});

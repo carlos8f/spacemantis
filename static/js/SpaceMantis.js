@@ -127,14 +127,13 @@ var SpaceMantis = function SpaceMantis(container, stats) {
       _myId = data.id;
       initObstacles(data.obstacles);
       for (var id in data.clients) {
-	_dynamicBodies[id] = createDynamicBody(data.clients[id]);
-	if (id == _myId) {
-	  _ship = _dynamicBodies[id];
-	  _serverPos = _ship.GetPosition();
-	  _camera = new THREE.FollowCamera(_fov, _windowWidth / _windowHeight, _near, _far, _ship.m_userData.mesh, 80, 10, 200);
-	  _ray = new THREE.Ray(_camera.position, null);
-	  run();
-	}
+        _dynamicBodies[id] = createDynamicBody(data.clients[id]);
+        if (id == _myId) {
+          _ship = _dynamicBodies[id];
+          _camera = new THREE.FollowCamera(_fov, _windowWidth / _windowHeight, _near, _far, _ship.m_userData.mesh, 80, 10, 200);
+          _ray = new THREE.Ray(_camera.position, null);
+          run();
+        }
       }
     });
     _socket.on('join', function(client) {
@@ -148,31 +147,31 @@ var SpaceMantis = function SpaceMantis(container, stats) {
     });
     _socket.on('snapshot', function(snapshot) {
       for (var id in snapshot) {
-	var delta = snapshot[id];
-	var body = _dynamicBodies[id];
-	var state = body.state;
-	if (id != _myId) {
-	  // Sync the state of other ships.
-	  for (var prop in delta) {
-	    state[prop] = delta[prop];
-	  }
-	  // Correct other ship positions with server snapshot.
-	  var serverDiff = new Box2D.b2Vec2(delta.x, delta.y);
-	  serverDiff.Subtract(_dynamicBodies[id].GetPosition());
-	  var length = serverDiff.Length();
-	  if (length > _correctionThreshold) {
-	    body.SetPosition(new Box2D.b2Vec2(delta.x, delta.y));
-	  }
-	}
+        var delta = snapshot[id];
+        var body = _dynamicBodies[id];
+        var state = body.state;
+        if (id != _myId) {
+          // Sync the state of other ships.
+          for (var prop in delta) {
+            state[prop] = delta[prop];
+          }
+          // Correct other ship positions with server snapshot.
+          var serverDiff = new Box2D.b2Vec2(delta.x, delta.y);
+          serverDiff.Subtract(_dynamicBodies[id].GetPosition());
+          var length = serverDiff.Length();
+          if (length > _correctionThreshold) {
+            body.SetPosition(new Box2D.b2Vec2(delta.x, delta.y));
+          }
+        }
       }
     });
     _socket.on('sync', function(data) {
       // Correct object positions using server data.
       for (var id in data.clients) {
-	var client = data.clients[id];
-	_dynamicBodies[id].m_userData.mesh.position.set(client.state.x, client.state.y, 0);
+        var client = data.clients[id];
+        _dynamicBodies[id].m_userData.mesh.position.set(client.state.x, client.state.y, 0);
         _dynamicBodies[id].SetPosition(new Box2D.b2Vec2(client.state.x, client.state.y));
-	_dynamicBodies[id].state = client.state;
+        _dynamicBodies[id].state = client.state;
       }
       _syncing = false;
     });
@@ -265,8 +264,8 @@ var SpaceMantis = function SpaceMantis(container, stats) {
       if (intersects.length > 0) {
         _velocity.Set(intersects[0].point.x - _ship.m_userData.mesh.position.x, intersects[0].point.y - _ship.m_userData.mesh.position.y);
         _velocity.Normalize();
-	_ship.state.vx = _velocity.x;
-	_ship.state.vy = _velocity.y;
+        _ship.state.vx = _velocity.x;
+        _ship.state.vy = _velocity.y;
         _ship.state.r = -Math.atan2(_ship.state.vx, _ship.state.vy);
 
         var diff = _ship.state.r - _lastTargetRotation;
@@ -281,7 +280,7 @@ var SpaceMantis = function SpaceMantis(container, stats) {
 
         _lastTargetRotation = _ship.state.r;
         _ship.state.r += _halfRotations * Math.PI * 2;
-	move();
+        move();
       }
     }
   }
@@ -291,8 +290,8 @@ var SpaceMantis = function SpaceMantis(container, stats) {
     var delta = {};
     for (var prop in _ship.state) {
       if (prop != 'x' && prop != 'y' && _ship.state[prop] != _lastState[prop]) {
-	changed = true;
-	_lastState[prop] = delta[prop] = _ship.state[prop];
+        changed = true;
+        _lastState[prop] = delta[prop] = _ship.state[prop];
       }
     }
     if (changed) {
@@ -341,7 +340,7 @@ var SpaceMantis = function SpaceMantis(container, stats) {
     for (var id in _dynamicBodies) {
       var body = _dynamicBodies[id];
       if (body.state.e == 1) {
-	body.ApplyImpulse(new Box2D.b2Vec2(body.state.vx, body.state.vy), _emptyVector);
+        body.ApplyImpulse(new Box2D.b2Vec2(body.state.vx, body.state.vy), _emptyVector);
       }
       var position = body.m_xf.position;
       var mesh = body.m_userData.mesh;
@@ -354,24 +353,23 @@ var SpaceMantis = function SpaceMantis(container, stats) {
     _world.ClearForces();
   }
 
+  /**
+   * Provides requestAnimationFrame in a cross browser way.
+   * http://paulirish.com/2011/requestanimationframe-for-smart-animating/
+   */
+  if ( !window.requestAnimationFrame ) {
+    window.requestAnimationFrame = ( function() {
+      return window.webkitRequestAnimationFrame ||
+        window.mozRequestAnimationFrame ||
+        window.oRequestAnimationFrame ||
+        window.msRequestAnimationFrame ||
+        function( /* function FrameRequestCallback */ callback, /* DOMElement Element */ element ) {
+          window.setTimeout( callback, 1000 / _frameRate );
+        };
+    })();
+  }
+
   // ship
   var binLoader = new THREE.BinaryLoader();
   binLoader.load({ model: '/models/simpleship.js', callback: init });
-}
-
-/**
- * Provides requestAnimationFrame in a cross browser way.
- * http://paulirish.com/2011/requestanimationframe-for-smart-animating/
- */
-
-if ( !window.requestAnimationFrame ) {
-  window.requestAnimationFrame = ( function() {
-    return window.webkitRequestAnimationFrame ||
-      window.mozRequestAnimationFrame ||
-      window.oRequestAnimationFrame ||
-      window.msRequestAnimationFrame ||
-      function( /* function FrameRequestCallback */ callback, /* DOMElement Element */ element ) {
-	window.setTimeout( callback, 1000 / _frameRate );
-      };
-  })();
 }
