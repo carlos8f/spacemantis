@@ -154,14 +154,14 @@ function step() {
       var lastClientState = lastWorldSnapshot[id];
       var changed = false;
       for (var prop in state) {
-	if (prop != 'x' && prop != 'y' && state[prop] != lastClientState[prop]) {
-	  delta[prop] = state[prop];
-	  changed = true;
-	}
+        if (prop != 'x' && prop != 'y' && state[prop] != lastClientState[prop]) {
+          delta[prop] = state[prop];
+          changed = true;
+        }
       }
       if (changed) {
-	snapshot[id] = _.extend(delta, {x: body.m_xf.position.x, y: body.m_xf.position.y});
-	anyChange = true;
+        snapshot[id] = _.extend(delta, {x: body.m_xf.position.x, y: body.m_xf.position.y});
+        anyChange = true;
       }
     }
     else {
