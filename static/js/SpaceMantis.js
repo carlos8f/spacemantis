@@ -88,6 +88,16 @@ var SpaceMantis = function SpaceMantis(container, stats) {
     mesh.position.y = client.state.y;
     mesh.position.z = 0; // It's a 2d game.
     mesh.rotation.x = Math.PI / 2; // Pointing up.
+    _scene.addChild(mesh);
+
+    var ghostMaterial = new THREE.MeshLambertMaterial({color: client.c, opacity: 0.5})
+    var ghostMesh = new THREE.Mesh(_shipGeometry, ghostMaterial);
+    ghostMesh.scale.set( size, size, size );
+    ghostMesh.position.x = client.state.x;
+    ghostMesh.position.y = client.state.y;
+    ghostMesh.position.z = 0; // It's a 2d game.
+    ghostMesh.rotation.x = Math.PI / 2; // Pointing up.
+    _scene.addChild(ghostMesh);
 
     //initialize body
     var def=new Box2D.b2BodyDef();
@@ -98,7 +108,7 @@ var SpaceMantis = function SpaceMantis(container, stats) {
     def.bullet = true; //dedicates more time to collision detection - car travelling at high speeds at low framerates otherwise might teleport through obstacles.
 
     var body = _world.CreateBody(def);
-    var userData = {mesh: mesh, rs: client.rs};
+    var userData = {mesh: mesh, ghostMesh: ghostMesh, rs: client.rs};
     body.SetUserData(userData);
     var massData = {mass: client.m, center: _emptyVector};
     body.SetMassData(massData);
@@ -112,8 +122,6 @@ var SpaceMantis = function SpaceMantis(container, stats) {
     //fixdef.shape.SetAsBox(width/2, height/2);
     body.CreateFixture(fixdef);
 
-    _scene.addChild(mesh);
-
     body.state = client.state;
 
     return body;
@@ -121,7 +129,7 @@ var SpaceMantis = function SpaceMantis(container, stats) {
 
   function initSocket() {
     _socket = io.connect();
-    _socket.on('init', function (data) {
+    _socket.on('init', function(data) {
       _myId = data.id;
       initObstacles(data.obstacles);
       for (var id in data.clients) {
@@ -134,7 +142,7 @@ var SpaceMantis = function SpaceMantis(container, stats) {
 	}
       }
     });
-    _socket.on('join', function (client) {
+    _socket.on('join', function(client) {
       _dynamicBodies[client.id] = createDynamicBody(client);
     });
     _socket.on('leave', function(id) {
@@ -143,16 +151,40 @@ var SpaceMantis = function SpaceMantis(container, stats) {
       _world.DestroyBody(_dynamicBodies[id]);
       delete _dynamicBodies[id];
     });
-    _socket.on('snapshot', function (snapshot) {
+    _socket.on('snapshot', function(snapshot) {
       for (var id in snapshot) {
+	var delta = snapshot[id];
+	var bodyState = _dynamicBodies[id].state;
 	if (id != _myId) {
-	  var delta = snapshot[id];
-	  var bodyState = _dynamicBodies[id].state;
+	  // Sync the state of other ships.
 	  for (var prop in delta) {
 	    bodyState[prop] = delta[prop];
 	  }
 	}
+	else {
+	  // For our own ship, we only care about correcting our position.
+	  bodyState.x = delta.x;
+	  bodyState.y = delta.y;
+	}
+	// Illustrate the server position with a ghost image.
+	var ghostMesh = _dynamicBodies[id].m_userData.ghostMesh;
+	ghostMesh.position.set(delta.x, delta.y, 0);
+	if (delta.hasOwnProperty('r')) {
+	  ghostMesh.rotation.y = delta.r;
+	}
       }
+    });
+    _socket.on('sync', function(data) {
+      // Correct object positions using server data.
+      /*
+      for (var id in data.clients) {
+	var client = data.clients[id];
+	_dynamicBodies[id].m_userData.mesh.position.set(client.state.x, client.state.y, 0);
+        _dynamicBodies[id].SetPosition(new Box2D.b2Vec2(client.state.x, client.state.y));
+	_dynamicBodies[id].state = client.state;
+	console.log('Correcting ' + id + ' to ' + client.state.x + ', ' + client.state.y + '!');
+      }
+      */
     });
   }
 
@@ -310,6 +342,12 @@ var SpaceMantis = function SpaceMantis(container, stats) {
       }
       var position = body.m_xf.position;
       var mesh = body.m_userData.mesh;
+      var xDiff = position.x - body.state.x;
+      var yDiff = position.y - body.state.y;
+      if (xDiff > 20 || yDiff > 20) {
+	// Looks like we got a little out of sync, request a complete snapshot.
+	_socket.emit('sync');
+      }
       mesh.position.x = position.x;
       mesh.position.y = position.y;
       mesh.rotation.y += (body.state.r - mesh.rotation.y) * body.m_userData.rs;

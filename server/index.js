@@ -126,6 +126,9 @@ io.sockets.on('connection', function (socket) {
     // Broadcast disconnect
     socket.broadcast.emit('leave', id);
   });
+  socket.on('sync', function() {
+    socket.emit('sync', {clients: clients});
+  });
   // Send initial data to client: world obstacles and complete client snapshots.
   socket.emit('init', {id: id, clients: clients, obstacles: obstacles});
   // Broadcast connect
@@ -138,25 +141,26 @@ function updateClients() {
   var anyChange = false;
   for (var id in clients) {
     var clientState = clients[id].state;
-    var delta = {};
+    
     if (lastWorldSnapshot.hasOwnProperty(id)) {
       // Compute delta state.
+      var delta = {};
       var lastClientState = lastWorldSnapshot[id];
       var changed = false;
       for (var prop in clientState) {
-	if (clientState[prop] != lastClientState[prop]) {
+	if (prop != 'x' && prop != 'y' && clientState[prop] != lastClientState[prop]) {
 	  delta[prop] = clientState[prop];
 	  changed = true;
 	}
       }
       if (changed) {
-	snapshot[id] = delta;
+	snapshot[id] = _.extend(delta, {x: dynamicBodies[id].m_xf.position.x, y: dynamicBodies[id].m_xf.position.y});
 	anyChange = true;
       }
     }
     else {
       // No previous snapshot of this client, send the whole state.
-      snapshot[id] = _.extend(delta, clientState);
+      snapshot[id] = _.extend({x: dynamicBodies[id].m_xf.position.x, y: dynamicBodies[id].m_xf.position.y}, clientState);
       anyChange = true;
     }
     lastWorldSnapshot[id] = _.extend({}, clientState);
