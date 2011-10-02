@@ -135,47 +135,41 @@ io.sockets.on('connection', function (socket) {
   socket.broadcast.emit('join', client);
 });
 
-function updateClients() {
-  setTimeout(updateClients, 100);
-  var snapshot = {};
+function step() {
   var anyChange = false;
-  for (var id in clients) {
-    var clientState = clients[id].state;
-    
+  var snapshot = {};
+  for (var id in dynamicBodies) {
+    var body = dynamicBodies[id];
+    var state = clients[id].state;
+    if (state.e == 1) {
+      body.ApplyImpulse(new Box2D.b2Vec2(state.vx, state.vy), _emptyVector);
+    }
+
     if (lastWorldSnapshot.hasOwnProperty(id)) {
       // Compute delta state.
       var delta = {};
       var lastClientState = lastWorldSnapshot[id];
       var changed = false;
-      for (var prop in clientState) {
-	if (prop != 'x' && prop != 'y' && clientState[prop] != lastClientState[prop]) {
-	  delta[prop] = clientState[prop];
+      for (var prop in state) {
+	if (prop != 'x' && prop != 'y' && state[prop] != lastClientState[prop]) {
+	  delta[prop] = state[prop];
 	  changed = true;
 	}
       }
       if (changed) {
-	snapshot[id] = _.extend(delta, {x: dynamicBodies[id].m_xf.position.x, y: dynamicBodies[id].m_xf.position.y});
+	snapshot[id] = _.extend(delta, {x: body.m_xf.position.x, y: body.m_xf.position.y});
 	anyChange = true;
       }
     }
     else {
       // No previous snapshot of this client, send the whole state.
-      snapshot[id] = _.extend({x: dynamicBodies[id].m_xf.position.x, y: dynamicBodies[id].m_xf.position.y}, clientState);
+      snapshot[id] = _.extend({x: body.m_xf.position.x, y: body.m_xf.position.y}, state);
       anyChange = true;
     }
-    lastWorldSnapshot[id] = _.extend({}, clientState);
+    lastWorldSnapshot[id] = _.extend({}, state);
   }
   if (anyChange) {
     io.sockets.emit('snapshot', snapshot);
-  }
-}
-
-function step() {
-  for (var id in dynamicBodies) {
-    var state = clients[id].state;
-    if (state.e == 1) {
-      dynamicBodies[id].ApplyImpulse(new Box2D.b2Vec2(state.vx, state.vy), _emptyVector);
-    }
   }
 
   _world.Step(_timeStep, _iterations);
@@ -184,5 +178,4 @@ function step() {
 
 initBox2d();
 generateObstacles();
-updateClients();
 setInterval(step, 1000/_frameRate);
