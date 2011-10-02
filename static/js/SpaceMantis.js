@@ -151,6 +151,7 @@ var SpaceMantis = function SpaceMantis(container, stats) {
     _socket.on('leave', function(id) {
       var body = _dynamicBodies[id];
       _scene.removeChild(body.m_userData.mesh);
+      _scene.removeChild(body.m_userData.ghostMesh);
       _world.DestroyBody(_dynamicBodies[id]);
       delete _dynamicBodies[id];
     });
