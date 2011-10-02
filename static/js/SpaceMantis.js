@@ -38,7 +38,8 @@ var SpaceMantis = function SpaceMantis(container, stats) {
 
   var _shipGeometry;
 
-  var _correctionThreshold = 10, _syncing = false, _serverPos;
+  var _correctionThreshold = 10, _syncing = false;
+  var _lastState = {};
 
   function updateMetrics() {
     _windowWidth = window.innerWidth;
@@ -304,7 +305,16 @@ var SpaceMantis = function SpaceMantis(container, stats) {
   }
 
   function move() {
-    _socket.emit('move', _ship.state);
+    var changed = false;
+    for (var prop in _ship.state) {
+      if (prop != 'x' && prop != 'y' && _ship.state[prop] != _lastState[prop]) {
+	changed = true;
+	_lastState[prop] = _ship.state[prop];
+      }
+    }
+    if (changed) {
+      _socket.emit('move', _ship.state);
+    }
   }
 
   function onKeyDown( event ) {
