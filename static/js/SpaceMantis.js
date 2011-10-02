@@ -5,17 +5,6 @@ var SpaceMantis = function SpaceMantis(container, stats) {
     _scene,
     _renderer;
 
-  var _metrics = {
-    stage: {
-      width: window.innerWidth,
-      height: window.innerHeight
-    },
-    world: {
-      width: window.innerWidth,
-      height: window.innerHeight
-    }
-  };
-
   var _frameRate = 60;
 
   var _timeStep = 1/_frameRate,
@@ -40,8 +29,7 @@ var SpaceMantis = function SpaceMantis(container, stats) {
   var _projector = new THREE.Projector();
   var _mouse2d = new THREE.Vector3();
   var _mouse3d = new THREE.Vector3();
-  var _windowHalfX = window.innerWidth / 2;
-  var _windowHalfY = window.innerHeight / 2;
+  var _windowHalfX, _windowHalfY, _windowWidth, _windowHeight;
 
   var _emptyVector = new Box2D.b2Vec2(0, 0);
 
@@ -50,8 +38,24 @@ var SpaceMantis = function SpaceMantis(container, stats) {
 
   var _shipGeometry;
 
+  function updateMetrics() {
+    _windowWidth = window.innerWidth;
+    _windowHeight = window.innerHeight;
+    _windowHalfX = _windowWidth / 2;
+    _windowHalfY = _windowHeight / 2;
+
+    if (typeof _renderer != 'undefined') {
+      _renderer.setSize(_windowWidth, _windowHeight);
+    }
+    if (typeof _camera != 'undefined') {
+      _camera.aspect = _windowWidth / _windowHeight;
+      _camera.updateProjectionMatrix();
+    }
+  }
+
   function init(shipGeometry) {
     _shipGeometry = shipGeometry;
+    updateMetrics();
     initScene();
     initBox2d();
     initSocket();
@@ -63,6 +67,7 @@ var SpaceMantis = function SpaceMantis(container, stats) {
 
   function run() {
     setInterval(step, 1000/_frameRate);
+    updateMetrics();
     render();
     var info = document.getElementById('info');
     info.innerHTML = 'W: thrust<br />Right click: change direction<br />Left click/drag: move camera';
@@ -123,7 +128,7 @@ var SpaceMantis = function SpaceMantis(container, stats) {
 	_dynamicBodies[id] = createDynamicBody(data.clients[id]);
 	if (id == _myId) {
 	  _ship = _dynamicBodies[id];
-	  _camera = new THREE.FollowCamera(_fov, _metrics.stage.width / _metrics.stage.height, _near, _far, _ship.m_userData.mesh, 80, 10, 200);
+	  _camera = new THREE.FollowCamera(_fov, _windowWidth / _windowHeight, _near, _far, _ship.m_userData.mesh, 80, 10, 200);
 	  _ray = new THREE.Ray(_camera.position, null);
 	  run();
 	}
@@ -199,7 +204,7 @@ var SpaceMantis = function SpaceMantis(container, stats) {
 
   function initView() {
     _renderer = new THREE.WebGLRenderer({ antialias: true });
-    _renderer.setSize(_metrics.stage.width, _metrics.stage.height);
+    _renderer.setSize(_windowWidth, _windowHeight);
     _renderer.setClearColorHex(0x000000, 1);
     _container.appendChild(_renderer.domElement);
   }
@@ -231,7 +236,7 @@ var SpaceMantis = function SpaceMantis(container, stats) {
 
   function onMouseDown( event ) {
     if ( event.button == 2 ) {
-      _mouse2d.set((event.clientX - _windowHalfX) / _metrics.stage.width, - ((event.clientY - _windowHalfY) / _metrics.stage.height)).multiplyScalar(2);
+      _mouse2d.set((event.clientX - _windowHalfX) / _windowWidth, - ((event.clientY - _windowHalfY) / _windowHeight)).multiplyScalar(2);
       _mouse3d = _projector.unprojectVector( _mouse2d.clone(), _camera );
       _ray.direction = _mouse3d.subSelf( _camera.position ).normalize();
       var intersects = _ray.intersectObject(_plane);
@@ -282,18 +287,12 @@ var SpaceMantis = function SpaceMantis(container, stats) {
     }
   }
 
-  function onResize() {
-    _renderer.setSize(window.innerWidth, window.innerHeight);
-    _camera.aspect = window.innerWidth / window.innerHeight;
-    _camera.updateProjectionMatrix();
-  }
-
   function initEvents() {
     document.addEventListener('contextmenu', function (event) { event.preventDefault(); }, false);
     document.addEventListener('mousedown', onMouseDown, false);
     document.addEventListener('keydown', onKeyDown, false);
     document.addEventListener('keyup', onKeyUp, false);
-    window.addEventListener('resize', onResize, false);
+    window.addEventListener('resize', updateMetrics, false);
   }
 
   function render() {
