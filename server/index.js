@@ -2,7 +2,7 @@ var express = require('express'),
     app = require('../app'),
     io = require('socket.io').listen(app),
     _ = require('underscore'),
-    Box2D = require('box2d');
+    Box2D = require('./box2d');
 
 var clients = {}, dynamicBodies = {}, obstacles = [], lastWorldSnapshot = {}, _world, _gravity = 0, _damping = 1.0;
 var _emptyVector = new Box2D.b2Vec2(0, 0);
