@@ -1,7 +1,5 @@
 var SpaceMantis = function SpaceMantis(container, stats) {
-  var _container = container,
-    _stats = stats,
-    box2d = exports; // Poor man's commonjs module!
+  var _container = container, _stats = stats;
 
   var _camera,
     _scene,
@@ -37,7 +35,7 @@ var SpaceMantis = function SpaceMantis(container, stats) {
   var _gravity = 0;
   var _damping = 1.0;
 
-  var _velocity = new box2d.b2Vec2(0, 1);
+  var _velocity = new Box2D.b2Vec2(0, 1);
 
   var _projector = new THREE.Projector();
   var _mouse2d = new THREE.Vector3();
@@ -45,7 +43,7 @@ var SpaceMantis = function SpaceMantis(container, stats) {
   var _windowHalfX = window.innerWidth / 2;
   var _windowHalfY = window.innerHeight / 2;
 
-  var _emptyVector = new box2d.b2Vec2(0, 0);
+  var _emptyVector = new Box2D.b2Vec2(0, 0);
 
   var _lastTargetRotation = 0;
   var _halfRotations = 0;
@@ -71,7 +69,7 @@ var SpaceMantis = function SpaceMantis(container, stats) {
   }
 
   function initBox2d() {
-    _world = new box2d.b2World(new box2d.b2Vec2(0, _gravity), false);
+    _world = new Box2D.b2World(new Box2D.b2Vec2(0, _gravity), false);
   }
 
   function createDynamicBody(client) {
@@ -87,9 +85,9 @@ var SpaceMantis = function SpaceMantis(container, stats) {
     mesh.rotation.x = Math.PI / 2; // Pointing up.
 
     //initialize body
-    var def=new box2d.b2BodyDef();
-    def.type = box2d.b2Body.b2_dynamicBody;
-    def.position = new box2d.b2Vec2(client.state.x, client.state.y);
+    var def=new Box2D.b2BodyDef();
+    def.type = Box2D.b2Body.b2_dynamicBody;
+    def.position = new Box2D.b2Vec2(client.state.x, client.state.y);
     //def.angle=math.radians(0); // 0 degrees
     def.linearDamping = _damping;  //gradually reduces velocity, makes the car reduce speed slowly if neither accelerator nor brake is pressed
     def.bullet = true; //dedicates more time to collision detection - car travelling at high speeds at low framerates otherwise might teleport through obstacles.
@@ -102,11 +100,11 @@ var SpaceMantis = function SpaceMantis(container, stats) {
     body.SetMassData(massData);
 
     //initialize shape
-    var fixdef= new box2d.b2FixtureDef();
+    var fixdef= new Box2D.b2FixtureDef();
     fixdef.density = 0.0;
     fixdef.friction = 1.0; //friction when rubbing against other shapes
     fixdef.restitution = 0.3;  //amount of force feedback when hitting something. >0 makes the car bounce off, it's fun!
-    fixdef.shape = new box2d.b2CircleShape(size * 20);
+    fixdef.shape = new Box2D.b2CircleShape(size * 20);
     //fixdef.shape.SetAsBox(width/2, height/2);
     body.CreateFixture(fixdef);
 
@@ -138,7 +136,7 @@ var SpaceMantis = function SpaceMantis(container, stats) {
     _socket.on('leave', function(id) {
       var body = _dynamicBodies[id];
       _scene.removeChild(body.m_userData.mesh);
-      _world.destroyBody(body);
+      body.Destroy();
       delete _dynamicBodies[id];
     });
     _socket.on('snapshot', function (snapshot) {
@@ -179,15 +177,15 @@ var SpaceMantis = function SpaceMantis(container, stats) {
       mesh.position.set(data.x, data.y, data.z);
 
       //initialize body
-      var bdef=new box2d.b2BodyDef();
-      bdef.position=new box2d.b2Vec2(mesh.position.x, mesh.position.y);
+      var bdef=new Box2D.b2BodyDef();
+      bdef.position=new Box2D.b2Vec2(mesh.position.x, mesh.position.y);
       bdef.angle=0;
       bdef.fixedRotation=true;
       var body = _world.CreateBody(bdef);
 
       //initialize shape
-      var fixdef = new box2d.b2FixtureDef;
-      fixdef.shape = new box2d.b2PolygonShape();
+      var fixdef = new Box2D.b2FixtureDef;
+      fixdef.shape = new Box2D.b2PolygonShape();
       fixdef.shape.SetAsBox(data.w/2, data.h/2);
       fixdef.restitution = 0.0;
       fixdef.friction = 1.0;
@@ -310,7 +308,7 @@ var SpaceMantis = function SpaceMantis(container, stats) {
     for (var id in _dynamicBodies) {
       var body = _dynamicBodies[id];
       if (body.state.e == 1) {
-	body.ApplyImpulse(new box2d.b2Vec2(body.state.vx, body.state.vy), _emptyVector);
+	body.ApplyImpulse(new Box2D.b2Vec2(body.state.vx, body.state.vy), _emptyVector);
       }
       var position = body.m_xf.position;
       var mesh = body.m_userData.mesh;
