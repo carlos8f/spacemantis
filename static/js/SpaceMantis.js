@@ -73,7 +73,7 @@ var SpaceMantis = function SpaceMantis(container, stats) {
     updateMetrics();
     render();
     var info = document.getElementById('info');
-    info.innerHTML = 'W: thrust<br />Right click: change direction<br />Left click/drag: move camera';
+    info.innerHTML = 'W: thrust<br />Right click: change direction<br />Left click/drag: move camera<br />Ping: <span id="ping"></span>';
   }
 
   function initBox2d() {
@@ -175,6 +175,14 @@ var SpaceMantis = function SpaceMantis(container, stats) {
       }
       _syncing = false;
     });
+    function ping() {
+      _socket.emit('ping', new Date().getTime(), function(timestamp) {
+        var pingDisplay = document.getElementById('ping');
+        pingDisplay.innerHTML = (new Date().getTime() - timestamp) + 'ms';
+        setTimeout(ping, 2000);
+      });
+    }
+    ping();
   }
 
   function initScene() {
