@@ -61,8 +61,6 @@ var SpaceMantis = function SpaceMantis(container, stats) {
     initPlane();
     initLights();
     initEvents();
-
-    run();
   }
 
   function run() {
@@ -76,31 +74,31 @@ var SpaceMantis = function SpaceMantis(container, stats) {
     _world = new box2d.b2World(new box2d.b2Vec2(0, _gravity), false);
   }
 
-  function createDynamicBody(snapshot) {
-    var material = new THREE.MeshLambertMaterial({color: snapshot.state.c, opacity: 1}),
+  function createDynamicBody(client) {
+    var material = new THREE.MeshLambertMaterial({color: client.c, opacity: 1}),
       mesh = new THREE.Mesh(_shipGeometry, material);
 
-    var size = 0.1; // Size matters
+    var size = 0.1; // Hard-coded for now
 
     mesh.scale.set( size, size, size );
-    mesh.position.x = snapshot.state.x;
-    mesh.position.y = snapshot.state.y;
+    mesh.position.x = client.state.x;
+    mesh.position.y = client.state.y;
     mesh.position.z = 0; // It's a 2d game.
     mesh.rotation.x = Math.PI / 2; // Pointing up.
 
     //initialize body
     var def=new box2d.b2BodyDef();
     def.type = box2d.b2Body.b2_dynamicBody;
-    def.position = new box2d.b2Vec2(snapshot.state.x, snapshot.state.y);
+    def.position = new box2d.b2Vec2(client.state.x, client.state.y);
     //def.angle=math.radians(0); // 0 degrees
     def.linearDamping = _damping;  //gradually reduces velocity, makes the car reduce speed slowly if neither accelerator nor brake is pressed
     def.bullet = true; //dedicates more time to collision detection - car travelling at high speeds at low framerates otherwise might teleport through obstacles.
     def.angularDamping = 0.3;
 
     var body = _world.CreateBody(def);
-    var userData = {mesh: mesh};
+    var userData = {mesh: mesh, rs: client.rs};
     body.SetUserData(userData);
-    var massData = {mass: snapshot.state.m, center: _emptyVector};
+    var massData = {mass: client.m, center: _emptyVector};
     body.SetMassData(massData);
 
     //initialize shape
@@ -114,40 +112,46 @@ var SpaceMantis = function SpaceMantis(container, stats) {
 
     _scene.addChild(mesh);
 
-    body.state = snapshot.state;
+    body.state = client.state;
 
     return body;
   }
 
   function initSocket() {
     _socket = io.connect();
-    _socket.on('join', function (data) {
+    _socket.on('init', function (data) {
       _myId = data.id;
       initObstacles(data.obstacles);
+      for (var id in data.clients) {
+	_dynamicBodies[id] = createDynamicBody(data.clients[id]);
+	if (id == _myId) {
+	  _ship = _dynamicBodies[id];
+	  _camera = new THREE.FollowCamera(_fov, _metrics.stage.width / _metrics.stage.height, _near, _far, _ship.m_userData.mesh, 80, 10, 200);
+	  _ray = new THREE.Ray(_camera.position, null);
+	  run();
+	}
+      }
+    });
+    _socket.on('join', function (client) {
+      _dynamicBodies[client.id] = createDynamicBody(client);
+    });
+    _socket.on('leave', function(id) {
+      var body = _dynamicBodies[id];
+      _scene.removeChild(body.m_userData.mesh);
+      _world.destroyBody(body);
+      delete _dynamicBodies[id];
     });
     _socket.on('snapshot', function (snapshot) {
-      if (typeof _myId != 'undefined') {
-        for (var i in snapshot) {
-          processSnapshot(snapshot[i]);
-        }
+      for (var id in snapshot) {
+	if (id != _myId) {
+	  var delta = snapshot[id];
+	  var bodyState = _dynamicBodies[id].state;
+	  for (var prop in delta) {
+	    bodyState[prop] = delta[prop];
+	  }
+	}
       }
     });
-  }
-
-  function processSnapshot(snapshot) {
-    var id = snapshot.id;
-    if (typeof _dynamicBodies[id] == 'undefined' && snapshot.state.d == 0) {
-      _dynamicBodies[id] = createDynamicBody(snapshot);
-      if (id == _myId) {
-        _ship = _dynamicBodies[id];
-      }
-    }
-    else if (snapshot.state.d == 1) {
-      destroyBody(id);
-    }
-    else if (id != _myId) {
-      _dynamicBodies[id].state = snapshot.state;
-    }
   }
 
   function initScene() {
@@ -235,7 +239,7 @@ var SpaceMantis = function SpaceMantis(container, stats) {
       _ray.direction = _mouse3d.subSelf( _camera.position ).normalize();
       var intersects = _ray.intersectObject(_plane);
       if (intersects.length > 0) {
-        _velocity.Set(intersects[0].point.x - _ship.state.x, intersects[0].point.y - _ship.state.y);
+        _velocity.Set(intersects[0].point.x - _ship.m_userData.mesh.position.x, intersects[0].point.y - _ship.m_userData.mesh.position.y);
         _velocity.Normalize();
 	_ship.state.vx = _velocity.x;
 	_ship.state.vy = _velocity.y;
@@ -253,12 +257,12 @@ var SpaceMantis = function SpaceMantis(container, stats) {
 
         _lastTargetRotation = _ship.state.r;
         _ship.state.r += _halfRotations * Math.PI * 2;
-	sendState();
+	move();
       }
     }
   }
 
-  function sendState() {
+  function move() {
     _socket.emit('move', _ship.state);
   }
 
@@ -267,7 +271,7 @@ var SpaceMantis = function SpaceMantis(container, stats) {
     event.stopPropagation();
 
     switch( event.keyCode ) {
-      case 87: /*W*/ _ship.state.e = 1; sendState(); break;
+      case 87: /*W*/ _ship.state.e = 1; move(); break;
       //case 32: /*space*/ _autoPilot = _autoPilot ? false : true; break;
     }
   }
@@ -277,7 +281,7 @@ var SpaceMantis = function SpaceMantis(container, stats) {
     event.stopPropagation();
 
     switch( event.keyCode ) {
-      case 87: /*W*/ _ship.state.e = 0; sendState(); break;
+      case 87: /*W*/ _ship.state.e = 0; move(); break;
     }
   }
 
@@ -288,43 +292,31 @@ var SpaceMantis = function SpaceMantis(container, stats) {
   }
 
   function initEvents() {
-    document.addEventListener( 'contextmenu', function ( event ) { event.preventDefault(); }, false );
-    document.addEventListener( 'mousedown', onMouseDown, false );
-    document.addEventListener( 'keydown', onKeyDown, false );
-    document.addEventListener( 'keyup', onKeyUp, false );
-    window.addEventListener( 'resize', onResize, false );
+    document.addEventListener('contextmenu', function (event) { event.preventDefault(); }, false);
+    document.addEventListener('mousedown', onMouseDown, false);
+    document.addEventListener('keydown', onKeyDown, false);
+    document.addEventListener('keyup', onKeyUp, false);
+    window.addEventListener('resize', onResize, false);
   }
 
   function render() {
     requestAnimationFrame(render);
-
-    if (typeof _ship != 'undefined' && typeof _camera == 'undefined') {
-      _camera = new THREE.FollowCamera(_fov, _metrics.stage.width / _metrics.stage.height, _near, _far, _ship.m_userData.mesh, 80, 10, 200);
-      _ray = new THREE.Ray(_camera.position, null);
-    }
-
-    if (typeof _camera != 'undefined') {
-      _renderer.render(_scene, _camera);
-    }
+    _renderer.render(_scene, _camera);
 
     _stats.update();
   }
 
   function step() {
-    if (typeof _ship != 'undefined') {
-      var numDynamicBodies = _dynamicBodies.length;
-      for (id in _dynamicBodies) {
-	var body = _dynamicBodies[id];
-	if (body.state.e == 1) {
-	  body.ApplyImpulse(new box2d.b2Vec2(body.state.vx, body.state.vy), _emptyVector);
-	}
-	var position = body.GetPosition();
-	var mesh = _ship.m_userData.mesh;
-	body.state.x = position.x;
-	body.state.y = position.y;
-	mesh.position.set(position.x, position.y, 0);
-	mesh.rotation.y += (body.state.r - mesh.rotation.y) * body.state.rs;
+    for (var id in _dynamicBodies) {
+      var body = _dynamicBodies[id];
+      if (body.state.e == 1) {
+	body.ApplyImpulse(new box2d.b2Vec2(body.state.vx, body.state.vy), _emptyVector);
       }
+      var position = body.m_xf.position;
+      var mesh = body.m_userData.mesh;
+      mesh.position.x = position.x;
+      mesh.position.y = position.y;
+      mesh.rotation.y += (body.state.r - mesh.rotation.y) * body.m_userData.rs;
     }
 
     _world.Step(_timeStep, _iterations);
@@ -333,7 +325,7 @@ var SpaceMantis = function SpaceMantis(container, stats) {
 
   // ship
   var binLoader = new THREE.BinaryLoader();
-  binLoader.load( { model: '/models/simpleship.js', callback: init } );
+  binLoader.load({ model: '/models/simpleship.js', callback: init });
 }
 
 /**

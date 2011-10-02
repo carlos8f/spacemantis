@@ -1,8 +1,9 @@
 var express = require('express'),
     app = require('../app'),
-    io = require('socket.io').listen(app);
+    io = require('socket.io').listen(app),
+    _ = require('underscore');
 
-var clients = {}, obstacles = [];
+var clients = {}, obstacles = [], lastWorldSnapshot = {};
 
 function newId(length) {
   var chars = "ABCDEFGHIJKLMNOPQRSTUVWXTZabcdefghiklmnopqrstuvwxyz";
@@ -11,31 +12,18 @@ function newId(length) {
     var rnum = Math.floor(Math.random() * chars.length);
     str += chars.substring(rnum, rnum+1);
   }
-  return str;
-};
-
-function emitSnapshot() {
-  // Generate snapshot.
-  var snapshot = [];
-  for (var i in clients) {
-    snapshot.push({id: clients[i].id, state: clients[i].state});
-    if (clients[i].state.d == 1) {
-      delete clients[i];
-    }
-  }
-
-  io.sockets.emit('snapshot', snapshot);
-};
+  return clients.hasOwnProperty(str) ? newId(length) : str;
+}
 
 function generateObstacles() {
   var clearArea = 50, x, y, z, w, h, d = 6;
   var num = 500;
-  for ( var i = 0; i < num; i++) {
+  for (var i = 0; i < num; i++) {
     w = Math.round(Math.random() * 10 + 2);
     h = Math.round(Math.random() * 10 + 2);
 
-    x = Math.round(( Math.random() - 0.5 ) * 500);
-    y = Math.round(( Math.random() - 0.5 ) * 500);
+    x = Math.round((Math.random() - 0.5) * 500);
+    y = Math.round((Math.random() - 0.5) * 500);
     z = (d/2) - 3;
 
     if (x < clearArea && x > -clearArea) {
@@ -50,37 +38,76 @@ function generateObstacles() {
   }
 }
 
-io.sockets.on('connection', function (socket) {
-  var id = newId(4);
-  socket.emit('join', {id: id, obstacles: obstacles});
-  socket.cid = id;
-  var client = {
+function newClient(id) {
+  return {
     id: id,
-    socket: socket,
+    c: 0x0055ff, // Color
+    m: 2.0, // Ship mass
+    rs: 0.1, // Rotation speed
     state: {
-      c: 0x0055ff, // Color
-      e: 0, // Engine on
-      r: 0, // Rotation (up)
-      x: (Math.random() - 0.5) * 100,
-      y: (Math.random() - 0.5) * 100,
+      e: 0, // Engine on/direction
+      r: 0, // Rotation
+      x: (Math.random() - 0.5) * 100, // Position X
+      y: (Math.random() - 0.5) * 100, // Position Y
       d: 0, // Destroyed?
-      m: 2.0, // Ship masse
-      rs: 0.1, // Rotation speed
       vx: 0, // Velocity X
       vy: 1 // Velocity Y
     }
   };
-  clients[id] = client;
+}
+
+io.sockets.on('connection', function (socket) {
+  var id = newId(4);
+  var client = clients[id] = newClient(id);
+
   socket.on('move', function(state) {
     // TODO: check game rules to ensure a valid move.
     client.state = state;
-    emitSnapshot();
   });
   socket.on('disconnect', function() {
-    clients[socket.cid].state.d = 1;
-    emitSnapshot();
+    delete clients[id];
+    // Broadcast disconnect
+    socket.broadcast.emit('leave', id);
   });
-  emitSnapshot();
+  // Send initial data to client: world obstacles and complete client snapshots.
+  socket.emit('init', {id: id, clients: clients, obstacles: obstacles});
+  // Broadcast connect
+  socket.broadcast.emit('join', client);
 });
 
+function updateClients() {
+  setTimeout(updateClients, 100);
+  var snapshot = {};
+  var anyChange = false;
+  for (var id in clients) {
+    var clientState = clients[id].state;
+    var delta = {};
+    if (lastWorldSnapshot.hasOwnProperty(id)) {
+      // Compute delta state.
+      var lastClientState = lastWorldSnapshot[id];
+      var changed = false;
+      for (var prop in clientState) {
+	if (clientState[prop] != lastClientState[prop]) {
+	  delta[prop] = clientState[prop];
+	  changed = true;
+	}
+      }
+      if (changed) {
+	snapshot[id] = delta;
+	anyChange = true;
+      }
+    }
+    else {
+      // No previous snapshot of this client, send the whole state.
+      snapshot[id] = _.extend(delta, clientState);
+      anyChange = true;
+    }
+    lastWorldSnapshot[id] = _.extend({}, clientState);
+  }
+  if (anyChange) {
+    io.sockets.emit('snapshot', snapshot);
+  }
+}
+
 generateObstacles();
+updateClients();
