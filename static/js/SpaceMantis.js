@@ -175,11 +175,17 @@ var SpaceMantis = function SpaceMantis(container, stats) {
       }
       _syncing = false;
     });
+    _socket.on('disconnect', function() {
+      alert('disconnected');
+      var info = document.getElementById('info');
+      info.innerHTML = 'Disconnected!';
+    });
     function ping() {
-      _socket.emit('ping', new Date().getTime(), function(timestamp) {
+      var start = new Date().getTime();
+      _socket.emit('ping', null, function() {
         var pingDisplay = document.getElementById('ping');
-        pingDisplay.innerHTML = (new Date().getTime() - timestamp) + 'ms';
-        setTimeout(ping, 2000);
+        pingDisplay.innerHTML = (new Date().getTime() - start) + 'ms';
+        setTimeout(ping, 5000);
       });
     }
     ping();

@@ -4,7 +4,7 @@ var express = require('express'),
     _ = require('underscore'),
     Box2D = require('./box2d');
 
-var clients = {}, dynamicBodies = {}, obstacles = [], lastWorldSnapshot = {}, _world, _gravity = 0, _damping = 1.0;
+var clients = {}, dynamicBodies = {}, sockets = {}, obstacles = [], lastWorldSnapshot = {}, _world, _gravity = 0, _damping = 1.0;
 var _emptyVector = new Box2D.b2Vec2(0, 0);
 
 var _frameRate = 60;
@@ -114,6 +114,7 @@ function newClient(id) {
 io.sockets.on('connection', function (socket) {
   var id = newId(4);
   var client = newClient(id);
+  sockets[id] = socket;
 
   socket.on('move', function(state) {
     // TODO: check game rules to ensure a valid move.
@@ -126,11 +127,12 @@ io.sockets.on('connection', function (socket) {
     _world.DestroyBody(dynamicBodies[id]);
     delete dynamicBodies[id];
     delete clients[id];
+    delete sockets[id];
     // Broadcast disconnect
     socket.broadcast.emit('leave', id);
   });
-  socket.on('ping', function(timestamp, fn) {
-    fn(timestamp);
+  socket.on('ping', function(nothing, fn) {
+    fn();
   });
   // Send initial data to client: world obstacles and complete client snapshots.
   socket.emit('init', {id: id, clients: clients, obstacles: obstacles});
@@ -172,7 +174,19 @@ function step() {
     lastWorldSnapshot[id] = _.extend({}, state);
   }
   if (anyChange) {
-    io.sockets.emit('snapshot', snapshot);
+    var tmpSnapshot = _.extend({}, snapshot);
+    for (var id in sockets) {
+      // @todo: don't send ship's own snapshot to itself.
+      //delete tmpSnapshot[id];
+      var hasKeys = false;
+      for (var key in tmpSnapshot) {
+        hasKeys = true;
+        break;
+      }
+      if (hasKeys) {
+        sockets[id].volatile.emit('snapshot', tmpSnapshot);
+      }
+    }
   }
 
   _world.Step(_timeStep, _iterations);
